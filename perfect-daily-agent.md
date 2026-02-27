@@ -1863,11 +1863,19 @@ $ python -m src.cli llm setup
        模型: GPT-4, GPT-3.5
        特点: 企业级、SLA保障
    
-   [5] 🇨🇳 国内大模型
-       模型: 文心一言、通义千问、智谱AI
-       特点: 中文优化、国内访问快
+   [5] 🌙 Kimi (Moonshot)
+       模型: kimi-k2, moonshot-v1-128k
+       特点: 长文本处理专家，支持200万字上下文
    
-   [6] ⏭️  跳过 - 暂不配置 LLM
+   [6] 🔷 通义千问 (Qwen)
+       模型: qwen-max, qwen-plus, qwen-turbo
+       特点: 阿里出品，中文理解优秀，代码能力强
+   
+   [7] 🔶 智谱 GLM
+       模型: glm-4-plus, glm-4, glm-4-air
+       特点: 清华出品，国内最早的开源大模型
+   
+   [8] ⏭️  跳过 - 暂不配置 LLM
        将使用规则摘要（功能受限）
 
 请选择 [1-6]: 1
@@ -2012,23 +2020,60 @@ api_version: 2024-02-15-preview
 deployment: gpt-4o
 ```
 
-**国内大模型配置：**
+**🇨🇳 国内大模型配置：**
+
 ```yaml
-# 文心一言 (百度)
+# Kimi (Moonshot) - 长文本处理专家
+# 获取 API Key: https://platform.moonshot.cn/
+provider: moonshot
+api_key: sk-xxxxxxxx
+default_model: kimi-k2
+models_available:
+  - kimi-k2              # 最新旗舰，综合能力强（推荐）
+  - moonshot-v1-128k     # 支持128K长上下文
+  - moonshot-v1-32k      # 支持32K上下文
+  - moonshot-v1-8k       # 标准版，性价比高
+features:
+  - 支持200万字长文本输入
+  - 适合深度文章分析和多文档对比
+  - 中文写作能力强
+
+# 通义千问 (Qwen) - 阿里出品
+# 获取 API Key: https://help.aliyun.com/zh/dashscope/
+provider: dashscope
+api_key: sk-xxxxxxxx
+default_model: qwen-max
+models_available:
+  - qwen-max             # 最强性能，复杂任务（推荐）
+  - qwen-plus            # 平衡性能与成本
+  - qwen-turbo           # 极速响应，高性价比
+  - qwen-coder-plus      # 代码专用
+features:
+  - 中文理解能力行业领先
+  - 代码生成和解释能力强
+  - 支持工具调用(Function Calling)
+
+# 智谱 GLM - 清华出品
+# 获取 API Key: https://open.bigmodel.cn/
+provider: zhipu
+api_key: xxxxxxxx
+default_model: glm-4-plus
+models_available:
+  - glm-4-plus           # 最新旗舰，综合能力最强（推荐）
+  - glm-4                # 标准版，高质量输出
+  - glm-4-air            # 高性价比版本
+  - glm-4-flash          # 极速版，成本最低
+features:
+  - 国内最早的开源大模型
+  - 对齐中文语境和文化背景
+  - 支持实时联网搜索
+
+# 其他国内模型（可选）
+# 文心一言 (百度): https://cloud.baidu.com/doc/WENXINWORKSHOP/
 provider: baidu
 api_key: xxxxxxxx
 secret_key: xxxxxxxx
 model: ernie-bot-4
-
-# 通义千问 (阿里)
-provider: aliyun
-api_key: sk-xxxxxxxx
-model: qwen-max
-
-# 智谱 AI
-provider: zhipu
-api_key: xxxxxxxx
-model: glm-4
 ```
 
 #### 9.5.4 多模型配置策略
@@ -2076,7 +2121,7 @@ usage_strategy:
 |------|----------|------|
 | 日常摘要 | gpt-4o-mini | 性价比高，速度快 |
 | 深度分析 | gpt-4o / Claude 3.5 | 推理能力强 |
-| 中文内容 | Qwen / 文心一言 | 中文理解更好 |
+| 中文内容 | Kimi / Qwen / GLM | 中文优化，国内访问快 |
 | 隐私敏感 | Ollama 本地模型 | 数据不出本地 |
 | 离线环境 | Ollama 本地模型 | 无需网络连接 |
 | 预算敏感 | gpt-4o-mini / 本地模型 | 成本低 |
