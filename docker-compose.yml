@@ -6,6 +6,13 @@ services:
     container_name: daily-agent
     env_file:
       - .env
+    environment:
+      # 启动模式: fast | configure
+      # fast: 零配置快速启动
+      # configure: 完整配置（需在本地完成配置后挂载）
+      - STARTUP_MODE=${STARTUP_MODE:-}
+      # 预设模板: tech_developer | product_manager | investor | business_analyst | designer | general
+      - SETUP_TEMPLATE=${SETUP_TEMPLATE:-}
     ports:
       - "8080:8080"
     volumes:

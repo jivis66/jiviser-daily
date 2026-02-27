@@ -816,3 +816,90 @@ async def import_config(filepath: str, user_id: str = "default", overwrite: bool
         await session.flush()
     
     return True
+
+
+async def get_user_config(user_id: str = "default") -> dict:
+    """
+    获取用户配置
+    
+    Args:
+        user_id: 用户ID
+        
+    Returns:
+        用户配置字典
+    """
+    from src.database import UserProfileDB, get_session
+    from sqlalchemy import select
+    
+    async with get_session() as session:
+        result = await session.execute(
+            select(UserProfileDB).where(UserProfileDB.user_id == user_id)
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise ValueError(f"未找到用户 {user_id} 的配置")
+        
+        return {
+            "user_id": user_id,
+            "profile": {
+                "industry": profile.industry,
+                "position": profile.position,
+                "expertise": json.loads(profile.expertise or "[]"),
+                "interests": json.loads(profile.interests or "[]"),
+            },
+            "preferences": {
+                "reading_time": profile.reading_time,
+                "summary_style": profile.summary_style,
+                "content_depth": profile.content_depth,
+                "push_time": profile.push_time,
+                "timezone": profile.timezone,
+                "push_channels": profile.push_channels.split(",") if profile.push_channels else [],
+            }
+        }
+
+
+async def apply_template(template_key: str, user_id: str = "default") -> bool:
+    """
+    应用预设模板到用户配置
+    
+    Args:
+        template_key: 模板ID
+        user_id: 用户ID
+        
+    Returns:
+        是否成功
+    """
+    if template_key not in PROFILE_TEMPLATES:
+        return False
+    
+    profile_template = PROFILE_TEMPLATES[template_key]
+    interest_template = INTEREST_TEMPLATES.get(template_key, INTEREST_TEMPLATES["general"])
+    daily_template = DAILY_REPORT_TEMPLATES.get(template_key, DAILY_REPORT_TEMPLATES["general"])
+    
+    # 保存到数据库
+    from src.database import UserProfileDB, get_session
+    from sqlalchemy import select
+    
+    async with get_session() as session:
+        result = await session.execute(
+            select(UserProfileDB).where(UserProfileDB.user_id == user_id)
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            profile = UserProfileDB(user_id=user_id)
+            session.add(profile)
+        
+        # 应用模板配置
+        profile.industry = profile_template.industry
+        profile.position = profile_template.position
+        profile.expertise = json.dumps(profile_template.expertise, ensure_ascii=False)
+        profile.interests = json.dumps([t["name"] for t in interest_template.core_topics], ensure_ascii=False)
+        profile.reading_time = f"{profile_template.daily_time_minutes}min"
+        profile.summary_style = daily_template.summary_method
+        profile.content_depth = interest_template.content_depth
+        
+        await session.flush()
+    
+    return True

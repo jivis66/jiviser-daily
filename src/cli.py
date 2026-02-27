@@ -151,6 +151,185 @@ def verify():
 
 
 @cli.command()
+@click.option("--mode", "-m", type=click.Choice(["fast", "configure"]), help="启动模式")
+@click.option("--template", "-t", help="使用预设模板")
+def start(mode: str, template: str):
+    """启动 Daily Agent 服务"""
+    async def _start():
+        from src.database import init_db
+        
+        # 检查是否首次启动
+        is_first_run = not os.path.exists("data/daily.db")
+        
+        if is_first_run and not mode:
+            # 首次启动，交互式选择模式
+            console.print("""
+🚀 Daily Agent 首次启动
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+欢迎使用 Daily Agent 个性化日报系统！
+
+请选择启动模式：
+
+  [1] ⚡ Fast 模式 - 开箱即用（推荐首次体验）
+      • 30 秒完成启动
+      • 使用默认配置，无需设置
+      • 基础功能立即可用
+      • ⚠️ 智能摘要、个性化推荐等功能不可用
+  
+  [2] 🔧 Configure 模式 - 全面配置（推荐日常使用）
+      • 3-5 分钟完成配置
+      • 个性化用户画像
+      • LLM 智能摘要
+      • 推送渠道设置
+      • 完整能力体验
+
+请选择 [1-2]: """)
+            choice = input().strip()
+            mode = "fast" if choice == "1" else "configure"
+        
+        if mode == "fast" or (not mode and template):
+            # Fast 模式启动
+            console.print("""
+🚀 Daily Agent - Fast 模式
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚡ 正在初始化...
+            """)
+            
+            await init_db()
+            
+            # 如果有模板，应用模板
+            if template:
+                from src.setup_wizard import SetupWizard
+                wizard = SetupWizard()
+                await wizard.apply_template(template)
+                console.print(f"  ✓ 应用模板: {template}")
+            
+            console.print("""
+  ✓ 数据库初始化完成
+  ✓ 默认配置加载完成
+  ✓ 通用模板应用完成
+
+✅ Fast 模式启动成功！
+
+📖 可用命令：
+  生成日报:    python -m src.cli generate
+  查看配置:    python -m src.cli verify
+  切换模式:    python -m src.cli setup wizard
+
+⚠️  提示：当前使用默认配置，部分高级功能未启用。
+    如需完整功能体验，请运行：python -m src.cli setup wizard
+
+🌐 Web 界面: http://localhost:8080
+📚 API 文档: http://localhost:8080/docs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            """)
+        
+        elif mode == "configure":
+            # Configure 模式 - 运行完整向导
+            from src.setup_wizard import SetupWizard
+            wizard = SetupWizard()
+            await wizard.run_full_setup()
+        
+        # 启动服务
+        import uvicorn
+        from src.config import get_settings
+        settings = get_settings()
+        
+        console.print(f"\n[green]正在启动服务...[/green]\n")
+        uvicorn.run(
+            "src.main:app",
+            host=settings.host,
+            port=settings.port,
+            reload=settings.debug
+        )
+    
+    asyncio.run(_start())
+
+
+@cli.command()
+def status():
+    """查看系统状态"""
+    async def _status():
+        from src.config import get_settings, get_column_config
+        from src.database import get_session, DailyReportRepository, ContentRepository
+        from datetime import datetime, timedelta
+        
+        settings = get_settings()
+        
+        console.print("""
+🤖 Daily Agent 状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        """)
+        
+        # 服务状态
+        console.print("[bold]服务状态:[/bold]")
+        console.print(f"  应用名称: {settings.app_name}")
+        console.print(f"  调试模式: {'开启' if settings.debug else '关闭'}")
+        console.print(f"  监听地址: {settings.host}:{settings.port}")
+        
+        # 配置状态
+        console.print("\n[bold]配置状态:[/bold]")
+        
+        # LLM
+        llm_status = "✅ 已配置" if settings.openai_api_key else "⚪ 未配置"
+        console.print(f"  LLM: {llm_status}")
+        
+        # 推送渠道
+        channels = []
+        if settings.telegram_bot_token:
+            channels.append("Telegram")
+        if settings.slack_bot_token:
+            channels.append("Slack")
+        if settings.discord_bot_token:
+            channels.append("Discord")
+        if settings.smtp_host:
+            channels.append("Email")
+        
+        channel_status = ", ".join(channels) if channels else "⚪ 未配置"
+        console.print(f"  推送渠道: {channel_status}")
+        
+        # 分栏配置
+        try:
+            col_config = get_column_config()
+            columns = col_config.get_columns()
+            console.print(f"  日报分栏: {len(columns)} 个")
+        except:
+            console.print("  日报分栏: ⚪ 未配置")
+        
+        # 今日统计
+        console.print("\n[bold]今日统计:[/bold]")
+        try:
+            async for session in get_session():
+                content_repo = ContentRepository(session)
+                report_repo = DailyReportRepository(session)
+                
+                today = datetime.utcnow().date()
+                yesterday = today - timedelta(days=1)
+                
+                # 获取今日采集数量
+                daily_items = await content_repo.get_by_date(yesterday, today)
+                console.print(f"  采集内容: {len(daily_items)} 条")
+                
+                # 获取今日日报
+                today_report = await report_repo.get_by_date("default", datetime.utcnow())
+                if today_report:
+                    console.print(f"  生成日报: 1 份 ({today_report.total_items} 条内容)")
+                    console.print(f"  推送状态: {'已推送' if today_report.is_sent else '未推送'}")
+                else:
+                    console.print("  生成日报: 0 份")
+                
+                break
+        except Exception as e:
+            console.print(f"  统计信息: 暂不可用 ({e})")
+        
+        console.print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    
+    asyncio.run(_status())
+
+
+@cli.command()
 def init():
     """初始化数据库"""
     async def _init():
@@ -399,10 +578,56 @@ def auth_guide():
 
 # ============ 启动设置向导命令 ============
 
-@cli.group()
-def setup():
+@cli.group(invoke_without_command=True)
+@click.option("--all", "all_modules", is_flag=True, help="完整重新配置所有模块")
+@click.option("--module", "module_name", type=click.Choice(["profile", "interests", "daily", "llm", "channels"]), help="仅配置特定模块")
+@click.option("--mode", type=click.Choice(["fast", "configure"]), help="启动模式")
+@click.option("--template", help="使用预设模板")
+@click.pass_context
+def setup(ctx, all_modules: bool, module_name: str, mode: str, template: str):
     """启动设置向导 - 配置用户画像、兴趣和日报"""
-    pass
+    if ctx.invoked_subcommand is not None:
+        return
+    
+    async def _setup():
+        # 如果指定了模式，执行对应的启动流程
+        if mode == "fast":
+            console.print("⚡ Fast 模式启动...")
+            if template:
+                from src.setup_wizard import apply_template
+                await apply_template(template)
+                console.print(f"✓ 应用模板: {template}")
+            console.print("✅ Fast 模式配置完成！")
+            return
+        
+        elif mode == "configure" or all_modules or module_name:
+            wizard = SetupWizard()
+            
+            if all_modules:
+                await wizard.run_full_setup()
+            elif module_name:
+                # 仅配置特定模块
+                if module_name == "profile":
+                    wizard.profile_config = await wizard._setup_profile()
+                    await wizard._save_config()
+                elif module_name == "interests":
+                    wizard.interest_config = await wizard._setup_interests()
+                    await wizard._save_config()
+                elif module_name == "daily":
+                    wizard.daily_config = await wizard._setup_daily_report()
+                    await wizard._save_daily_config()
+                elif module_name == "llm":
+                    await wizard._setup_llm()
+                console.print(f"✅ {module_name} 模块配置完成！")
+            else:
+                await wizard.run_full_setup()
+            return
+        
+        # 默认运行完整向导
+        wizard = SetupWizard()
+        await wizard.run_full_setup()
+    
+    asyncio.run(_setup())
 
 
 @setup.command("wizard")
@@ -558,6 +783,155 @@ def llm_models():
     
     wizard = LLMSetupWizard()
     wizard.print_models()
+
+
+# ============ 配置管理命令 ============
+
+@cli.group()
+def config():
+    """配置管理 - 查看、导出、导入配置"""
+    pass
+
+
+@config.command("show")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.option("--format", "-f", type=click.Choice(["yaml", "json"]), default="yaml", help="输出格式")
+def config_show(user: str, format: str):
+    """查看当前配置"""
+    async def _show():
+        from src.setup_wizard import get_user_config
+        
+        try:
+            user_config = await get_user_config(user)
+            
+            if format == "yaml":
+                import yaml
+                output = yaml.dump(user_config, allow_unicode=True, sort_keys=False)
+            else:
+                import json
+                output = json.dumps(user_config, indent=2, ensure_ascii=False)
+            
+            console.print(Panel(output, title=f"用户配置: {user}", border_style="blue"))
+        except Exception as e:
+            console.print(f"[yellow]⚠️ 尚未配置，请运行: python -m src.cli setup wizard[/yellow]")
+    
+    asyncio.run(_show())
+
+
+@config.command("export")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.option("--format", "-f", type=click.Choice(["yaml", "json"]), default="yaml", help="导出格式")
+@click.option("--output", "-o", help="输出文件路径")
+def config_export(user: str, format: str, output: str):
+    """导出用户配置"""
+    async def _export():
+        from src.setup_wizard import export_config
+        
+        try:
+            filepath = await export_config(user_id=user, format=format, output=output)
+            console.print(f"[green]✅ 配置已导出到: {filepath}[/green]")
+        except ValueError as e:
+            console.print(f"[red]✗ {e}[/red]")
+    
+    asyncio.run(_export())
+
+
+@config.command("import")
+@click.argument("filepath")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.option("--force", "-f", is_flag=True, help="强制覆盖现有配置")
+def config_import(filepath: str, user: str, force: bool):
+    """导入用户配置"""
+    async def _import():
+        from src.setup_wizard import import_config
+        
+        try:
+            success = await import_config(filepath, user_id=user, overwrite=force)
+            if success:
+                console.print(f"[green]✅ 配置导入成功[/green]")
+            else:
+                console.print(f"[yellow]⚠️ 用户已有配置，使用 --force 覆盖[/yellow]")
+        except Exception as e:
+            console.print(f"[red]✗ 导入失败: {e}[/red]")
+    
+    asyncio.run(_import())
+
+
+@config.command("validate")
+@click.option("--config-file", "-c", help="配置文件路径（验证外部配置）")
+def config_validate(config_file: str):
+    """验证配置有效性"""
+    console.print("[bold]配置验证[/bold]\n")
+    
+    if config_file:
+        # 验证外部配置文件
+        try:
+            import yaml
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            console.print(f"[green]✅ 配置文件格式正确[/green]")
+            console.print(f"  包含键: {', '.join(config.keys())}")
+        except Exception as e:
+            console.print(f"[red]✗ 配置文件错误: {e}[/red]")
+    else:
+        # 验证当前配置
+        from src.config import get_settings, get_column_config
+        
+        settings = get_settings()
+        col_config = get_column_config()
+        
+        errors = []
+        warnings = []
+        
+        # 检查必要配置
+        if not settings.api_secret_key or settings.api_secret_key == "your-secret-key-change-this":
+            warnings.append("API_SECRET_KEY 使用默认值，建议修改")
+        
+        # 检查分栏配置
+        try:
+            columns = col_config.get_columns()
+            if not columns:
+                errors.append("分栏配置为空")
+            else:
+                for col in columns:
+                    if not col.get('sources'):
+                        warnings.append(f"分栏 '{col.get('name')}' 没有配置数据源")
+        except Exception as e:
+            errors.append(f"分栏配置错误: {e}")
+        
+        # 输出结果
+        if errors:
+            console.print("[red]错误:[/red]")
+            for e in errors:
+                console.print(f"  ✗ {e}")
+        
+        if warnings:
+            console.print("[yellow]警告:[/yellow]")
+            for w in warnings:
+                console.print(f"  ⚠ {w}")
+        
+        if not errors and not warnings:
+            console.print("[green]✅ 配置验证通过[/green]")
+
+
+@config.command("reset")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.confirmation_option(prompt="确定要重置配置吗？这将删除所有用户设置")
+def config_reset(user: str):
+    """重置用户配置"""
+    async def _reset():
+        from src.database import get_session
+        from sqlalchemy import text
+        
+        async for session in get_session():
+            # 删除用户相关数据
+            await session.execute(text("DELETE FROM user_profiles WHERE user_id = :user_id"), {"user_id": user})
+            await session.execute(text("DELETE FROM user_feedbacks WHERE user_id = :user_id"), {"user_id": user})
+            await session.commit()
+            console.print(f"[green]✅ 用户 {user} 的配置已重置[/green]")
+            break
+    
+    asyncio.run(_reset())
 
 
 # 简化命令别名

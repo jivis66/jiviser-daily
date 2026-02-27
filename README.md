@@ -1,455 +1,511 @@
-# Daily Agent - 完美个性化日报信息收集 Agent
+# Daily Agent - 你的个性化智能日报
 
-基于 [perfect-daily-agent.md](perfect-daily-agent.md) 能力图谱实现的智能日报系统。
+> 自动从多源信息渠道采集、智能筛选、生成个性化日报，推送到你指定的渠道。
 
-## ✨ 功能特性
+---
 
-### 核心能力
+## 🚀 5 分钟快速开始
 
-- **🔥 多源采集**
-  - RSS 订阅源（TechCrunch、36氪、arXiv 等）
-  - API 数据源（Hacker News、GitHub Trending、Hugging Face）
-  - 社交媒体（B站、小红书、知乎、即刻）
-  - 新闻媒体（财新、FT中文网、第一财经）
-  - 音频播客
-
-- **🧠 智能处理**
-  - 内容清洗与格式化
-  - 关键词提取与主题分类
-  - LLM 驱动的自动摘要（1句/3点/段落）
-  - 多语言支持
-
-- **🎯 智能筛选**
-  - 语义去重与精确去重
-  - 基于多维度质量评分
-  - 个性化排序算法
-  - 多样性保证（避免单一来源占比过高）
-
-- **📤 多格式输出**
-  - Markdown / HTML / JSON
-  - Telegram / Slack / Discord 推送
-  - 邮件推送
-  - 自定义模板
-
-- **👤 个性化**
-  - 用户画像构建
-  - 兴趣偏好学习
-  - 冷启动模板支持
-  - 反馈驱动的持续优化
-
-### 技术亮点
-
-- **⚡ 异步架构**: 基于 asyncio 的高性能并发采集
-- **🔧 热更新配置**: 无需重启服务的配置更新
-- **🤖 多 LLM 支持**: OpenAI、Claude、Ollama、Azure、国产模型
-- **📊 质量评分**: 多维度内容质量评估体系
-- **🔐 安全认证**: API 密钥保护和用户认证
-
-## 🚀 快速开始
-
-### 1. 克隆仓库
+### 方式一：Docker（推荐）
 
 ```bash
+# 1. 克隆仓库
 git clone https://github.com/uhajivis-cell/openclaw-skills-daily.git
 cd openclaw-skills-daily
+
+# 2. 选择启动方式
+
+# 方式 A: Fast 模式（零配置，推荐首次体验）
+STARTUP_MODE=fast docker-compose up -d
+
+# 方式 B: 使用预设模板
+SETUP_TEMPLATE=tech_developer docker-compose up -d
+
+# 方式 C: 先本地配置，再挂载到容器（推荐日常使用）
+# 先在本地运行配置向导，然后启动容器
+python -m src.cli setup wizard  # 完成配置
+docker-compose up -d            # 启动容器（配置自动挂载）
+
+# 3. 查看日志
+docker-compose logs -f
 ```
 
-### 2. 配置环境变量
+### 方式二：本地运行
 
 ```bash
-cp .env.example .env
-```
+# 1. 克隆仓库
+git clone https://github.com/uhajivis-cell/openclaw-skills-daily.git
+cd openclaw-skills-daily
 
-最小配置（仅基础功能）：
-```bash
-# 可选：配置 LLM 以获得更好的摘要效果
-OPENAI_API_KEY=sk-your-api-key
-
-# 可选：配置推送渠道
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
-```
-
-### 3. 启动服务
-
-#### 方式一：Docker（推荐）
-
-```bash
-docker-compose up -d
-```
-
-#### 方式二：本地运行
-
-```bash
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 安装依赖
+# 2. 创建环境
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# 启动服务
+# 3. 启动（首次启动会进入交互式配置）
+python -m src.cli start
+
+# 或直接使用 uvicorn（跳过交互配置）
 uvicorn src.main:app --reload
 ```
 
-### 4. 验证服务
+---
+
+## ⚡ 双模式启动
+
+首次启动时，系统会检测配置状态并引导你选择：
+
+| 模式 | 启动时间 | 特点 | 适合场景 |
+|------|----------|------|----------|
+| **Fast 模式** | 30 秒 | 零配置开箱即用，使用默认模板 | 快速体验、临时使用 |
+| **Configure 模式** | 3-5 分钟 | 完整交互式配置，个性化设置 | 日常使用、深度定制 |
+
+### 跳过交互，直接启动
 
 ```bash
-curl http://localhost:8080/health
+# Fast 模式（零配置）
+python -m src.cli start --mode fast
+
+# Configure 模式（完整配置向导）
+python -m src.cli start --mode configure
+
+# 使用预设模板启动
+python -m src.cli start --template tech_developer
 ```
 
-访问 API 文档：`http://localhost:8080/docs`
+### Docker 环境变量启动
 
-## 📡 API 使用
+```bash
+# Fast 模式
+docker run -e STARTUP_MODE=fast daily-agent
+
+# 使用预设模板
+docker run -e SETUP_TEMPLATE=product_manager daily-agent
+```
+
+---
+
+## 📝 配置流程（Configure 模式）
+
+首次启动进入 Configure 模式后，按提示完成 5 步配置：
+
+### Step 1: 用户画像
+```
+👤 用户画像
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 您当前从事的行业是？
+   [1] 互联网/科技  [2] 金融/投资  [3] 咨询/商业分析
+   [4] 媒体/内容创作 [5] 学术研究 [6] 其他
+
+请选择 [1-6]: 1
+
+📝 您的职位或角色是？
+   [1] 技术开发者  [2] 产品经理  [3] 创业者/高管
+   [4] 投资人/分析师 [5] 其他
+
+请选择 [1-5]: 2
+```
+
+### Step 2: 兴趣偏好
+```
+🎯 兴趣偏好
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 选择配置方式：
+   [1] 🚀 快速配置 - 选择预设模板（推荐）
+   [2] 🎨 自定义配置 - 详细设置每一项
+
+请选择 [1-2]: 1
+
+📝 选择预设模板：
+   [1] 👨‍💻 技术开发者  [2] 💼 产品经理
+   [3] 💰 投资人     [4] 📊 商业分析师
+   [5] 🎨 设计师     [6] 📰 综合资讯
+
+请选择 [1-6]: 2
+```
+
+### Step 3: 日报设置
+```
+📰 日报设置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 日报风格选择：
+   [1] 📰 新闻简报型  [2] 📖 深度阅读型
+   [3] 💬 对话简报型  [4] 📊 数据驱动型
+
+请选择 [1-4]: 2
+
+📝 日报分栏设置（按需启用/调整条数）：
+   [x] 🔥 今日头条 - 3条
+   [x] 🤖 AI/技术 - 5条
+   [x] 💰 商业/投资 - 3条
+   [ ] 🛠️ 产品/工具 - 2条
+   [ ] 📚 深度阅读 - 1条
+```
+
+### Step 4: LLM 配置（可选）
+```
+🤖 LLM 配置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 选择 LLM 提供商：
+   [1] 🌐 OpenAI (推荐)
+   [2] 🔗 OpenRouter
+   [3] 🏠 Ollama (本地)
+   [4] 🌙 Kimi (Moonshot)
+   [5] 🔷 通义千问
+   [6] 🔶 智谱 GLM
+   [7] ⏭️  跳过
+
+请选择 [1-7]: 1
+
+请输入 OpenAI API Key: sk-xxxxxxxxxxxxxxxx
+
+✅ API Key 验证通过！
+```
+
+### Step 5: 推送渠道（可选）
+```
+📤 推送渠道
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 选择推送渠道：
+   [ ] Telegram
+   [ ] Slack
+   [ ] Discord
+   [ ] Email
+   [x] 暂不配置（可后续设置）
+
+配置完成后，系统会自动生成第一份日报！
+```
+
+---
+
+## 🎮 日常使用
 
 ### 生成日报
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/reports/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "default",
-    "date": "2024-01-15",
-    "columns": ["headlines", "tech"],
-    "force_refresh": false
-  }'
+# 生成今日日报
+python -m src.cli generate
+
+# 指定日期生成
+python -m src.cli generate --date 2024-01-15
+
+# 推送到指定渠道
+python -m src.cli push <report_id> --channel telegram
 ```
 
-### 获取日报列表
+### 查看与管理
 
 ```bash
-curl "http://localhost:8080/api/v1/reports?user_id=default&limit=10"
+# 查看系统状态
+python -m src.cli status
+
+# 查看当前配置
+python -m src.cli config show
+
+# 导出配置（备份/迁移）
+python -m src.cli config export --output my-config.yaml
+
+# 导入配置
+python -m src.cli config import my-config.yaml
 ```
 
-### 获取日报详情
+### 重新配置
 
 ```bash
-# JSON 格式
-curl http://localhost:8080/api/v1/reports/{report_id}
+# 完整重新配置
+python -m src.cli setup --all
 
-# Markdown 格式
-curl "http://localhost:8080/api/v1/reports/{report_id}?format=markdown"
+# 仅修改特定模块
+python -m src.cli setup --module profile      # 用户画像
+python -m src.cli setup --module interests    # 兴趣偏好
+python -m src.cli setup --module daily        # 日报设置
+python -m src.cli setup --module llm          # LLM 配置
+python -m src.cli setup --module channels     # 推送渠道
 ```
 
-### 推送日报
+---
 
+## 🔧 配置模板
+
+系统内置 7 种预设模板，覆盖主流用户场景：
+
+| 模板 ID | 名称 | 适合人群 | 核心关注 |
+|---------|------|----------|----------|
+| `tech_developer` | 👨‍💻 技术开发者 | 程序员、架构师 | 开源、AI、工具 |
+| `product_manager` | 💼 产品经理 | PM、产品设计师 | 设计、增长、行业 |
+| `investor` | 💰 投资人 | VC、PE、分析师 | 市场、融资、财报 |
+| `business_analyst` | 📊 商业分析师 | 咨询、战略 | 行业研究、数据 |
+| `designer` | 🎨 设计师 | UI/UX、创意 | 趋势、工具、灵感 |
+| `general` | 📰 综合资讯 | 大众用户 | 平衡资讯 |
+| `minimal` | ⚡ 极简模式 | 时间有限 | 仅头条+摘要 |
+
+使用模板启动：
 ```bash
-curl -X POST http://localhost:8080/api/v1/reports/{report_id}/push \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channels": ["telegram", "slack"]
-  }'
+python -m src.cli setup --template tech_developer
 ```
 
-### 手动触发采集
+---
 
+## 📡 推送渠道配置
+
+### Telegram
+
+1. 找 [@BotFather](https://t.me/botfather) 创建 Bot，获取 Token
+2. 找 [@userinfobot](https://t.me/userinfobot) 获取 Chat ID
+3. 配置环境变量或交互式输入
+
+### Slack
+
+1. 访问 [Slack API](https://api.slack.com/apps) 创建 App
+2. 添加 `chat:write` 权限，安装到工作区
+3. 复制 Bot Token（以 `xoxb-` 开头）
+
+### Discord
+
+1. 访问 [Discord Developer](https://discord.com/developers/applications) 创建 Bot
+2. 获取 Bot Token，开启 `Send Messages` 权限
+3. 右键频道 → 复制频道 ID
+
+### 邮件
+
+支持任意 SMTP 服务：
 ```bash
-curl -X POST http://localhost:8080/api/v1/collect
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password  # Gmail 需使用应用专用密码
 ```
 
-### 提交反馈
+---
 
+## 🤖 LLM 配置建议
+
+| 使用场景 | 推荐模型 | 获取方式 |
+|----------|----------|----------|
+| 日常摘要 | OpenAI gpt-4o-mini | [platform.openai.com](https://platform.openai.com) |
+| 高质量摘要 | OpenAI gpt-4o / Claude 3.5 | [openrouter.ai](https://openrouter.ai) |
+| 中文内容 | Kimi / 通义千问 | [platform.moonshot.cn](https://platform.moonshot.cn) |
+| 隐私敏感 | Ollama 本地模型 | [ollama.com](https://ollama.com) |
+
+快速配置：
 ```bash
-curl -X POST http://localhost:8080/api/v1/feedback \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "default",
-    "item_id": "content-id",
-    "feedback_type": "positive",
-    "comment": "很有帮助"
-  }'
+# 查看 LLM 状态
+python -m src.cli llm status
+
+# 测试连接
+python -m src.cli llm test
+
+# 切换模型
+python -m src.cli llm switch
 ```
 
-### 获取/更新用户画像
+---
 
-```bash
-# 获取画像
-curl http://localhost:8080/api/v1/profile/default
+## 📚 数据源配置
 
-# 更新画像
-curl -X PUT http://localhost:8080/api/v1/profile/default \
-  -H "Content-Type: application/json" \
-  -d '{
-    "interests": ["AI", "区块链", "编程"],
-    "push_time": "09:00"
-  }'
-```
-
-### 重新加载配置
-
-```bash
-curl -X POST http://localhost:8080/api/v1/reload
-```
-
-## 🛠️ 配置说明
-
-### 分栏配置 (`config/columns.yaml`)
-
-定义日报的各个分栏：
+编辑 `config/columns.yaml` 自定义数据源：
 
 ```yaml
 columns:
   - id: "headlines"
     name: "🔥 今日头条"
-    description: "当日最重要的科技新闻"
-    enabled: true
     max_items: 5
-    order: 1
     sources:
       - type: "rss"
         name: "TechCrunch"
         url: "https://techcrunch.com/feed/"
-        weight: 1.0
         filter:
-          keywords: ["AI", "人工智能", "大模型"]
-          exclude: ["广告", "sponsored"]
+          keywords: ["AI", "人工智能"]
       
       - type: "api"
         name: "Hacker News"
         provider: "hackernews"
-        endpoint: "https://hacker-news.firebaseio.com/v0/topstories.json"
         filter:
           min_score: 100
-    
-    organization:
-      sort_by: "relevance"      # 排序方式：relevance/time/mixed
-      dedup_strategy: "semantic" # 去重策略：semantic/exact/none
-      summarize: "3_points"     # 摘要方式：1_sentence/3_points/paragraph/none
-      highlight_key_info: true
 ```
 
-### 环境变量
+支持的数据源类型：
+- **RSS**: 任意 RSS/Atom 订阅源
+- **API**: Hacker News、GitHub Trending、NewsAPI 等
+- **社交媒体**: B站、知乎、即刻、小红书（部分需 Cookie 认证）
 
-#### 服务配置
+配置修改后热更新（无需重启）：
+```bash
+curl -X POST http://localhost:8080/api/v1/reload
+```
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `APP_NAME` | 应用名称 | DailyAgent |
-| `DEBUG` | 调试模式 | false |
-| `LOG_LEVEL` | 日志级别 | info |
-| `HOST` | 服务监听地址 | 0.0.0.0 |
-| `PORT` | 服务端口 | 8080 |
+---
 
-#### LLM 配置
+## 🔐 私有渠道认证
 
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `OPENAI_API_KEY` | OpenAI API 密钥 | sk-xxx |
-| `OPENAI_MODEL` | 模型名称 | gpt-4o-mini |
-| `OPENAI_BASE_URL` | 自定义 API 地址 | https://api.openai.com/v1 |
+对于需要登录的渠道（即刻、小红书等），使用 CLI 工具配置：
 
-支持多种 LLM 提供商：OpenAI、OpenRouter、Ollama、Azure OpenAI、通义千问、文心一言、智谱 AI
+```bash
+# 列出已配置的认证
+python -m src.cli auth list
 
-#### 数据库配置
+# 添加认证（交互式）
+python -m src.cli auth add jike
+python -m src.cli auth add xiaohongshu
+python -m src.cli auth add zhihu
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `DATABASE_URL` | 数据库连接 URL | sqlite:///data/daily.db |
+# 测试认证状态
+python -m src.cli auth test jike
 
-#### 采集配置
+# 删除认证
+python -m src.cli auth remove jike
+```
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `MAX_CONCURRENT_COLLECTORS` | 并发采集数 | 5 |
-| `REQUEST_DELAY` | 请求间隔（秒） | 1.0 |
-| `CONTENT_RETENTION_DAYS` | 内容保留天数 | 30 |
+Cookie 获取方式（以即刻为例）：
+1. 浏览器登录 [web.okjike.com](https://web.okjike.com)
+2. F12 打开开发者工具 → Network 标签
+3. 刷新页面，找到任意 API 请求
+4. 右键 → Copy → Copy as cURL
+5. 粘贴到 CLI 提示中
 
-#### 推送配置
+---
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `DEFAULT_PUSH_TIME` | 默认推送时间 | 09:00 |
-| `TIMEZONE` | 时区 | Asia/Shanghai |
+## 🌐 API 接口
 
-#### Telegram 推送
+服务启动后访问 API 文档：`http://localhost:8080/docs`
 
-| 变量 | 说明 |
-|------|------|
-| `TELEGRAM_BOT_TOKEN` | Bot Token |
-| `TELEGRAM_CHAT_ID` | 聊天 ID |
+常用接口：
 
-#### Slack 推送
+```bash
+# 生成日报
+curl -X POST http://localhost:8080/api/v1/reports/generate \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default", "columns": ["headlines", "tech"]}'
 
-| 变量 | 说明 |
-|------|------|
-| `SLACK_BOT_TOKEN` | Bot Token |
-| `SLACK_CHANNEL` | 频道名 |
+# 获取日报（Markdown 格式）
+curl "http://localhost:8080/api/v1/reports/{id}?format=markdown"
 
-#### Discord 推送
+# 推送日报
+curl -X POST http://localhost:8080/api/v1/reports/{id}/push \
+  -H "Content-Type: application/json" \
+  -d '{"channels": ["telegram"]}'
 
-| 变量 | 说明 |
-|------|------|
-| `DISCORD_BOT_TOKEN` | Bot Token |
-| `DISCORD_CHANNEL_ID` | 频道 ID |
+# 提交反馈
+curl -X POST http://localhost:8080/api/v1/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"item_id": "xxx", "feedback_type": "positive"}'
+```
 
-#### 邮件推送
-
-| 变量 | 说明 |
-|------|------|
-| `SMTP_HOST` | SMTP 服务器 |
-| `SMTP_PORT` | SMTP 端口 |
-| `SMTP_USER` | 用户名 |
-| `SMTP_PASSWORD` | 密码 |
-| `EMAIL_FROM` | 发件人 |
-| `EMAIL_TO` | 收件人 |
+---
 
 ## 📁 项目结构
 
 ```
 .
-├── src/                        # 源代码目录
-│   ├── collector/              # 采集模块
-│   │   ├── rss_collector.py    # RSS 采集器
-│   │   ├── api_collector.py    # API 采集器
-│   │   ├── bilibili_collector.py  # B站采集器
-│   │   ├── xiaohongshu_collector.py  # 小红书采集器
-│   │   └── ...                 # 其他采集器
-│   ├── processor/              # 处理模块
-│   │   ├── cleaner.py          # 内容清洗
-│   │   ├── extractor.py        # 信息提取
-│   │   └── summarizer.py       # 摘要生成
-│   ├── filter/                 # 筛选排序模块
-│   │   ├── deduper.py          # 去重算法
-│   │   ├── ranker.py           # 排序算法
-│   │   └── selector.py         # 内容选择
-│   ├── output/                 # 输出模块
-│   │   ├── formatter.py        # 格式转换
-│   │   └── publisher.py        # 推送发布
-│   ├── personalization/        # 个性化模块
-│   │   ├── profile.py          # 用户画像
-│   │   └── learning.py         # 学习算法
-│   ├── auth_manager.py         # 认证管理
-│   ├── cli.py                  # 命令行工具
-│   ├── config.py               # 配置管理
-│   ├── database.py             # 数据库模型
-│   ├── llm_config.py           # LLM 配置
-│   ├── main.py                 # FastAPI 入口
-│   ├── models.py               # 数据模型
-│   ├── scheduler.py            # 任务调度
-│   ├── service.py              # 业务服务
-│   └── setup_wizard.py         # 设置向导
-├── config/                     # 配置文件目录
-│   ├── columns.yaml            # 分栏配置
-│   ├── sources_example.yaml    # 数据源配置示例
-│   └── templates.yaml          # 模板配置
-├── tests/                      # 测试目录
-├── data/                       # 数据目录（SQLite 数据库）
-├── docker-compose.yml          # Docker 部署配置
-├── Dockerfile                  # Docker 镜像构建
-├── requirements.txt            # Python 依赖
-├── start.sh                    # 启动脚本
-└── .env.example                # 环境变量示例
+├── src/                    # 源代码
+│   ├── collector/          # 采集模块（RSS/API/社交媒体）
+│   ├── processor/          # 处理模块（清洗/摘要/分类）
+│   ├── filter/             # 筛选排序模块
+│   ├── output/             # 输出模块（格式化/推送）
+│   ├── personalization/    # 个性化模块（画像/学习）
+│   ├── cli.py              # 命令行工具
+│   └── main.py             # FastAPI 入口
+├── config/                 # 配置文件
+│   ├── columns.yaml        # 日报分栏配置
+│   └── templates.yaml      # 用户画像模板
+├── data/                   # 数据目录（SQLite）
+├── docker-compose.yml      # Docker 部署
+└── requirements.txt        # Python 依赖
 ```
 
-## 💬 推送渠道配置
+---
 
-### Telegram
+## ⚙️ 环境变量
 
-1. 创建 Bot: [@BotFather](https://t.me/botfather)，获取 Bot Token
-2. 获取 Chat ID: [@userinfobot](https://t.me/userinfobot)
-3. 配置环境变量：
-   ```bash
-   TELEGRAM_BOT_TOKEN=your-bot-token
-   TELEGRAM_CHAT_ID=your-chat-id
-   ```
-
-### Slack
-
-1. 创建 App: [Slack API](https://api.slack.com/apps)
-2. 添加 `chat:write` 权限
-3. 安装到工作区并获取 Bot Token
-4. 配置环境变量：
-   ```bash
-   SLACK_BOT_TOKEN=xoxb-your-token
-   SLACK_CHANNEL=#daily-news
-   ```
-
-### Discord
-
-1. 创建 Bot: [Discord Developer](https://discord.com/developers/applications)
-2. 获取 Bot Token
-3. 获取频道 ID（右键频道 -> 复制 ID）
-4. 配置环境变量：
-   ```bash
-   DISCORD_BOT_TOKEN=your-token
-   DISCORD_CHANNEL_ID=your-channel-id
-   ```
-
-### 邮件
-
-支持任意 SMTP 服务（Gmail、QQ、163 等）：
+完整环境变量参考 `.env.example`，常用配置：
 
 ```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-EMAIL_FROM=Daily Agent <your-email@gmail.com>
-EMAIL_TO=recipient@example.com
+# 基础配置
+DEBUG=false
+LOG_LEVEL=info
+PORT=8080
+
+# LLM 配置
+OPENAI_API_KEY=sk-xxx
+OPENAI_MODEL=gpt-4o-mini
+
+# 推送配置
+TELEGRAM_BOT_TOKEN=xxx
+TELEGRAM_CHAT_ID=xxx
+SLACK_BOT_TOKEN=xoxb-xxx
+SLACK_CHANNEL=#daily
+
+# 采集配置
+MAX_CONCURRENT_COLLECTORS=5
+CONTENT_RETENTION_DAYS=30
 ```
 
-> Gmail 需要使用应用专用密码，而非登录密码。
+---
 
-## 🖥️ CLI 工具
+## 🛠️ 高级使用
 
-项目提供命令行工具用于管理：
+### 定时任务
+
+系统内置 APScheduler，默认每日 9:00 自动生成并推送日报。
+
+修改推送时间：
+```bash
+# 配置文件中修改
+python -m src.cli setup --module daily
+# 或设置环境变量
+DEFAULT_PUSH_TIME=08:00
+```
+
+### 多用户支持
 
 ```bash
-# 生成日报
-python -m src.cli generate --user default
+# 为不同用户生成日报
+python -m src.cli generate --user alice
+python -m src.cli generate --user bob
 
-# 指定日期生成
-python -m src.cli generate --user default --date 2024-01-15
-
-# 手动触发采集
-python -m src.cli collect
-
-# 推送日报
-python -m src.cli push <report_id> --channel telegram --channel slack
-
-# 查看帮助
-python -m src.cli --help
+# 查看指定用户配置
+python -m src.cli config show --user alice
 ```
 
-## 📋 开发计划
+### 配置迁移
 
-- [x] 基础采集 (RSS/API)
-- [x] 内容处理 (清洗/摘要/分类)
-- [x] 筛选排序 (去重/质量评分/个性化排序)
-- [x] 多格式输出 (Markdown/HTML/JSON)
-- [x] 多推送渠道 (Telegram/Slack/Discord/邮件)
-- [x] 用户画像与个性化
-- [x] 反馈学习系统
-- [x] CLI 工具
-- [x] Docker 部署
-- [x] 热更新配置
-- [ ] Playwright 网页采集增强
-- [ ] 智能问答交互
-- [ ] 管理后台 Web UI
-- [ ] 多租户支持
-- [ ] 多语言界面
+```bash
+# 导出用户 A 的配置
+python -m src.cli config export --user alice --output alice-config.yaml
 
-## 🤝 贡献指南
+# 导入到用户 B
+python -m src.cli config import alice-config.yaml --user bob
+```
 
-1. Fork 本项目
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
+---
 
-### 开发规范
+## ❓ 常见问题
 
-- 使用 Python 类型注解
-- 异步 IO 操作使用 `async/await`
-- 新功能需包含测试
-- 遵循 PEP 8 代码风格
+**Q: Fast 模式和 Configure 模式有什么区别？**
+
+A: Fast 模式 30 秒零配置启动，使用默认模板，适合快速体验；Configure 模式提供完整个性化配置，3-5 分钟完成，适合日常使用。
+
+**Q: 如何切换到 Configure 模式？**
+
+A: 运行 `python -m src.cli setup --mode configure` 随时进入完整配置向导。
+
+**Q: 可以不配置 LLM 吗？**
+
+A: 可以。系统会使用规则摘要，但智能摘要、质量评估等功能不可用。
+
+**Q: 如何添加自定义 RSS 源？**
+
+A: 编辑 `config/columns.yaml`，在对应分栏下添加 `type: rss` 的数据源即可。
+
+**Q: 推送失败怎么排查？**
+
+A: 使用 `python -m src.cli auth test <channel>` 测试渠道连接，或查看日志 `docker-compose logs -f`。
+
+---
 
 ## 📄 许可证
 
 MIT License - 详见 [LICENSE](LICENSE) 文件
 
-## 🔗 相关链接
+---
 
-- 能力图谱文档: [perfect-daily-agent.md](perfect-daily-agent.md)
-- 开发指南: [AGENTS.md](AGENTS.md)
-- 项目主页: https://github.com/uhajivis-cell/openclaw-skills-daily
+**快速开始 → [5 分钟快速开始](#-5-分钟快速开始)** | **配置详情 → [配置流程](#-配置流程configure-模式)** | **API 文档 → `http://localhost:8080/docs`**
