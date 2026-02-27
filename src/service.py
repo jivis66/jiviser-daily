@@ -168,7 +168,7 @@ class DailyAgentService:
             columns = [c for c in columns if c.get("id") in column_ids]
         
         # 3. 处理内容并生成日报
-        async for session in get_session():
+        async with get_session() as session:
             content_repo = ContentRepository(session)
             report_repo = DailyReportRepository(session)
             
@@ -297,7 +297,7 @@ class DailyAgentService:
         # 获取分栏配置和内容
         columns = self.column_config.get_columns()
         
-        async for session in get_session():
+        async with get_session() as session:
             # 获取日报内容
             content_repo = ContentRepository(session)
             report_repo = DailyReportRepository(session)

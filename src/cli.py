@@ -53,7 +53,7 @@ def push(report_id: str, channel: tuple):
         service = DailyAgentService()
         await service.initialize()
         
-        async for session in get_session():
+        async with get_session() as session:
             repo = DailyReportRepository(session)
             db_report = await repo.get_by_id(report_id)
             
@@ -312,7 +312,7 @@ def status():
         # 今日统计
         console.print("\n[bold]今日统计:[/bold]")
         try:
-            async for session in get_session():
+            async with get_session() as session:
                 content_repo = ContentRepository(session)
                 report_repo = DailyReportRepository(session)
                 
@@ -934,13 +934,12 @@ def config_reset(user: str):
         from src.database import get_session
         from sqlalchemy import text
         
-        async for session in get_session():
+        async with get_session() as session:
             # 删除用户相关数据
             await session.execute(text("DELETE FROM user_profiles WHERE user_id = :user_id"), {"user_id": user})
             await session.execute(text("DELETE FROM user_feedbacks WHERE user_id = :user_id"), {"user_id": user})
             await session.commit()
             console.print(f"[green]✅ 用户 {user} 的配置已重置[/green]")
-            break
     
     asyncio.run(_reset())
 

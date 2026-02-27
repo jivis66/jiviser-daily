@@ -86,7 +86,7 @@ app = FastAPI(
 # 依赖注入
 async def get_db_session():
     """获取数据库会话"""
-    async for session in get_session():
+    async with get_session() as session:
         yield session
 
 
