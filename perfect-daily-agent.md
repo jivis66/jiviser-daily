@@ -1343,54 +1343,143 @@ data/
 
 ## 9. 启动设置与交互式配置
 
-提供友好的交互式向导，帮助用户快速完成初始配置，包括用户画像设置、兴趣偏好学习和日报内容定制。
+提供统一的启动时配置系统，服务首次启动时自动检测配置状态并引导用户完成初始化。所有交互式设置整合进启动流程，确保用户在开始使用前获得最佳个性化体验。
 
-### 9.1 启动设置向导
+### 9.1 启动时配置系统
+
+**核心设计原则：**
+
+- **自动检测**: 服务启动时自动检查必要配置是否完整
+- **渐进式引导**: 按需引导用户完成配置，避免一次性信息过载
+- **配置热加载**: 配置变更无需重启服务
+- **状态持久化**: 所有配置保存至数据库，支持备份与迁移
+
+**启动配置检测流程：**
+
+```python
+class StartupConfigurator:
+    """启动时配置管理器"""
+    
+    async def check_and_configure(self) -> ConfigStatus:
+        """
+        启动时配置检查与引导
+        
+        Returns:
+            ConfigStatus: 配置状态，决定是否需要进入交互式配置
+        """
+        status = ConfigStatus()
+        
+        # 1. 检查数据库初始化
+        if not await self.db.is_initialized():
+            await self.init_database()
+            status.needs_db_setup = True
+        
+        # 2. 检查用户画像
+        profile = await self.get_user_profile("default")
+        if not profile or not profile.is_complete():
+            status.needs_profile = True
+        
+        # 3. 检查兴趣偏好
+        interests = await self.get_user_interests("default")
+        if not interests or interests.is_empty():
+            status.needs_interests = True
+        
+        # 4. 检查日报配置
+        daily_config = await self.get_daily_config("default")
+        if not daily_config:
+            status.needs_daily_config = True
+        
+        # 5. 检查 LLM 配置
+        llm_config = await self.get_llm_config()
+        if not llm_config or not llm_config.is_valid():
+            status.needs_llm_config = True
+            # LLM 可选，标记为建议而非必需
+            status.llm_optional = True
+        
+        # 6. 检查推送渠道
+        channels = await self.get_push_channels("default")
+        if not channels:
+            status.needs_channels = True
+            # 推送渠道可选
+            status.channels_optional = True
+        
+        return status
+```
+
+**启动时交互式配置触发：**
+
+```bash
+# 方式一：服务启动时自动检测
+$ uvicorn src.main:app --reload
+
+🚀 Daily Agent 正在启动...
+📊 配置状态检查
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  数据库连接      ✅ 正常
+  用户画像        ⚠️  未配置
+  兴趣偏好        ⚠️  未配置
+  日报设置        ⚠️  未配置
+  LLM 配置        ⚪ 可选
+  推送渠道        ⚪ 可选
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+检测到首次启动，需要完成初始配置。
+是否立即进入交互式配置向导？ [Y/n]: Y
+
+# 进入统一配置向导...
+```
+
+**Docker 启动配置：**
+
+```bash
+# Docker 启动时自动检测，可通过环境变量跳过交互式配置
+$ docker-compose up -d
+
+# 如需预配置（非交互式）
+$ docker-compose run --rm daily-agent python -m src.cli setup --non-interactive --template tech_developer
+```
+
+### 9.2 统一配置向导
+
+整合用户画像、兴趣偏好、日报定制、LLM配置于一体的交互式配置流程。
 
 **启动命令：**
 
 ```bash
-# 首次启动交互式设置
+# 交互式配置（默认）
 $ python -m src.cli setup
 
+# 使用预设模板快速配置
+$ python -m src.cli setup --template product_manager
+
+# 非交互式配置（用于自动化部署）
+$ python -m src.cli setup --non-interactive --config-file setup.yaml
+
 # 重新配置特定模块
-$ python -m src.cli setup --profile      # 仅用户画像
-$ python -m src.cli setup --interests    # 仅兴趣偏好
-$ python -m src.cli setup --daily        # 仅日报内容
-$ python -m src.cli setup --all          # 完整重新配置
+$ python -m src.cli setup --module profile      # 仅用户画像
+$ python -m src.cli setup --module interests    # 仅兴趣偏好
+$ python -m src.cli setup --module daily        # 仅日报设置
+$ python -m src.cli setup --module llm          # 仅 LLM 配置
+$ python -m src.cli setup --all                 # 完整重新配置
 ```
 
-**交互式启动流程：**
+**完整配置流程：**
 
 ```bash
 $ python -m src.cli setup
 
 🎉 欢迎使用 Daily Agent 个性化日报系统
-
-这是一个交互式设置向导，将帮助您完成初始配置。
-整个过程大约需要 3-5 分钟。
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 设置步骤概览
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  1. 👤 用户画像设置 (约 1 分钟)
-  2. 🎯 兴趣偏好配置 (约 2 分钟)
-  3. 📰 日报内容定制 (约 1 分钟)
-  4. 🔗 推送渠道配置 (可选)
-
-按 Enter 开始设置...
-```
-
-### 9.2 用户画像交互式设置
-
-**设置流程：**
-
-```bash
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 步骤 1/4: 用户画像设置
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-这些基础信息将帮助我为您筛选更相关的内容。
+这是一个交互式配置向导，将帮助您完成初始设置。
+整个过程大约需要 3-5 分钟，您随时可以按 Ctrl+C 退出并在稍后继续。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+步骤 1/5: 👤 用户画像
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+这些基础信息将帮助系统为您筛选更相关的内容。
 
 📝 您当前从事的行业是？
    [1] 互联网/科技
@@ -1433,43 +1522,13 @@ $ python -m src.cli setup
 请选择 [1-3]: 2
 
 ✅ 用户画像设置完成！
-```
 
-**用户画像数据结构：**
-
-```python
-{
-    "user_id": "default",
-    "profile": {
-        "industry": "互联网/科技",
-        "position": "产品经理",
-        "expertise": ["AI", "大语言模型", "产品设计", "Python"],
-        "experience_level": "senior",  # junior/mid/senior/expert
-        "company_size": "startup",     # startup/mid/enterprise
-        "location": "北京"             # 用于本地化内容
-    },
-    "reading_preferences": {
-        "daily_time_minutes": 20,
-        "preferred_time": "09:00",
-        "timezone": "Asia/Shanghai"
-    }
-}
-```
-
-### 9.3 兴趣偏好交互式配置
-
-**设置流程：**
-
-```bash
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 步骤 2/4: 兴趣偏好配置
+步骤 2/5: 🎯 兴趣偏好
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-我将通过几个简单的问题了解您的兴趣偏好。
-您也可以直接选择预设模板。
 
 📝 选择配置方式：
-   [1] 🚀 快速配置 - 选择预设模板
+   [1] 🚀 快速配置 - 选择预设模板（推荐）
    [2] 🎨 自定义配置 - 详细设置每一项
 
 请选择 [1-2]: 1
@@ -1497,83 +1556,11 @@ $ python -m src.cli setup
 请输入: 数据分析 低代码平台
 
 ✅ 已添加: 数据分析、低代码平台
-```
 
-**自定义配置流程：**
+✅ 兴趣偏好配置完成！
 
-```bash
-🎨 自定义兴趣配置
-
-📝 核心关注领域（最多选 5 个）：
-   [x] 人工智能/机器学习
-   [x] 大语言模型/AIGC
-   [ ] 区块链/Web3
-   [x] 云计算/云原生
-   [ ] 网络安全
-   [x] 移动互联网
-   [ ] 物联网/硬件
-   [ ] 生物科技
-   [ ] 新能源
-   [ ] 其他
-
-📝 感兴趣的内容类型：
-   [x] 行业新闻和动态
-   [x] 深度分析文章
-   [x] 技术教程/实践案例
-   [x] 产品发布和评测
-   [ ] 创业公司融资信息
-   [ ] 学术研究报告
-   [x] 观点/评论文章
-
-📝 偏好来源类型：
-   [x] 主流媒体（36氪、虎嗅等）
-   [x] 开发者社区（GitHub、Hacker News）
-   [x] 社交媒体（即刻、Twitter）
-   [ ] 学术论文/技术博客
-   [x] 视频/播客内容
-
-📝 内容语言偏好：
-   [1] 仅中文
-   [2] 仅英文
-   [3] 中英文混合（优先中文）
-   [4] 中英文混合（优先英文）
-
-请选择 [1-4]: 3
-```
-
-**兴趣偏好数据结构：**
-
-```python
-{
-    "interests": {
-        "core_topics": [
-            {"name": "产品设计", "weight": 1.0},
-            {"name": "用户增长", "weight": 0.9},
-            {"name": "AI应用", "weight": 0.9},
-            {"name": "数据分析", "weight": 0.8},
-            {"name": "低代码平台", "weight": 0.7}
-        ],
-        "content_types": ["news", "analysis", "tutorial", "product_review"],
-        "source_preferences": {
-            "media": 0.8,
-            "community": 0.9,
-            "social": 0.7,
-            "academic": 0.3
-        },
-        "language_preference": "zh_first",
-        "content_depth": "medium",  # light/medium/deep
-        "novelty_preference": "balanced"  # trending/balanced/timeless
-    }
-}
-```
-
-### 9.4 日报内容交互式定制
-
-**设置流程：**
-
-```bash
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📰 步骤 3/4: 日报内容定制
+步骤 3/5: 📰 日报设置
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 定制您的日报结构、分栏和内容筛选规则。
@@ -1609,246 +1596,22 @@ $ python -m src.cli setup
 📝 内容筛选规则：
 
    最低质量分数: [60]/100
-   （越高内容越精选，越低内容越丰富）
-
    时间范围: [24]小时
-   （只采集最近 N 小时的内容）
-
    去重敏感度: [中等]
-   [1] 宽松 - 保留相似内容
-   [2] 中等 - 平衡去重
-   [3] 严格 - 只保留独特内容
 
-📝 摘要生成设置：
-   [1] 规则摘要 - 快速、稳定
-   [2] LLM摘要 - 高质量、需要API Key
-
-请选择 [1-2]: 2
-
-⚠️ 未检测到 OPENAI_API_KEY，将使用规则摘要。
-   如需使用 LLM 摘要，请在 .env 中配置 API Key。
-```
-
-**日报配置数据结构：**
-
-```python
-{
-    "daily_report": {
-        "style": "detailed",  # brief/detailed/chat/data
-        "columns": [
-            {
-                "id": "headlines",
-                "name": "今日头条",
-                "enabled": True,
-                "max_items": 3,
-                "order": 1
-            },
-            {
-                "id": "ai_tech",
-                "name": "AI/技术",
-                "enabled": True,
-                "max_items": 5,
-                "order": 2
-            },
-            {
-                "id": "business",
-                "name": "商业/投资",
-                "enabled": True,
-                "max_items": 3,
-                "order": 3
-            },
-            {
-                "id": "products",
-                "name": "产品/工具",
-                "enabled": True,
-                "max_items": 2,
-                "order": 4
-            }
-        ],
-        "filter_rules": {
-            "min_quality_score": 60,
-            "time_window_hours": 24,
-            "dedup_level": "medium"  # low/medium/high
-        },
-        "summary": {
-            "method": "llm",  # rule/llm
-            "length": "medium",  # short/medium/long
-            "include_key_points": True
-        }
-    }
-}
-```
-
-### 9.5 配置模板库
-
-**预设模板：**
-
-```yaml
-# 模板: 技术开发者 (tech_developer)
-tech_developer:
-  name: "👨‍💻 技术开发者"
-  description: "专注技术趋势、开源项目、编程实践"
-  profile:
-    industry: "互联网/科技"
-    position: "技术开发者"
-    expertise: ["软件开发", "开源技术", "系统架构"]
-  interests:
-    core_topics:
-      - {name: "人工智能", weight: 1.0}
-      - {name: "大语言模型", weight: 0.95}
-      - {name: "开源项目", weight: 0.9}
-      - {name: "编程语言", weight: 0.85}
-      - {name: "云原生", weight: 0.8}
-    content_types: ["tutorial", "news", "analysis"]
-  daily:
-    style: "detailed"
-    columns:
-      - {id: "github", name: "🔥 GitHub 趋势", max_items: 5}
-      - {id: "ai_tech", name: "🤖 AI/技术", max_items: 5}
-      - {id: "dev_tools", name: "🛠️ 开发工具", max_items: 3}
-      - {id: "tech_news", name: "📰 科技新闻", max_items: 3}
-
-# 模板: 产品经理 (product_manager)
-product_manager:
-  name: "💼 产品经理"
-  description: "关注产品设计、用户增长、行业动态"
-  profile:
-    industry: "互联网/科技"
-    position: "产品经理"
-    expertise: ["产品设计", "用户研究", "数据分析"]
-  interests:
-    core_topics:
-      - {name: "产品设计", weight: 1.0}
-      - {name: "用户增长", weight: 0.9}
-      - {name: "用户体验", weight: 0.9}
-      - {name: "商业模式", weight: 0.8}
-      - {name: "AI应用", weight: 0.85}
-    content_types: ["analysis", "product_review", "news"]
-  daily:
-    style: "brief"
-    columns:
-      - {id: "headlines", name: "🔥 今日头条", max_items: 3}
-      - {id: "product_hunt", name: "🚀 Product Hunt", max_items: 5}
-      - {id: "ai_apps", name: "🤖 AI应用", max_items: 4}
-      - {id: "business", name: "💰 商业动态", max_items: 3}
-
-# 模板: 投资人 (investor)
-investor:
-  name: "💰 投资人"
-  description: "关注市场趋势、创业公司、财报数据"
-  profile:
-    industry: "金融/投资"
-    position: "投资人/分析师"
-    expertise: ["投资分析", "市场研究", "财务分析"]
-  interests:
-    core_topics:
-      - {name: "创业公司", weight: 1.0}
-      - {name: "投融资", weight: 0.95}
-      - {name: "市场趋势", weight: 0.9}
-      - {name: "财报分析", weight: 0.85}
-      - {name: "宏观经济", weight: 0.7}
-    content_types: ["news", "analysis"]
-  daily:
-    style: "data"
-    columns:
-      - {id: "market", name: "📈 市场动态", max_items: 5}
-      - {id: "funding", name: "💰 融资信息", max_items: 5}
-      - {id: "earnings", name: "📊 财报速递", max_items: 3}
-      - {id: "analysis", name: "🔍 深度分析", max_items: 3}
-
-# 模板: 综合资讯 (general)
-general:
-  name: "📰 综合资讯"
-  description: "平衡的科技、商业、社会资讯"
-  profile:
-    industry: "其他"
-    position: "其他"
-    expertise: []
-  interests:
-    core_topics:
-      - {name: "科技", weight: 0.8}
-      - {name: "商业", weight: 0.8}
-      - {name: "社会", weight: 0.6}
-      - {name: "文化", weight: 0.5}
-    content_types: ["news", "analysis"]
-  daily:
-    style: "brief"
-    columns:
-      - {id: "headlines", name: "🔥 今日头条", max_items: 5}
-      - {id: "tech", name: "💻 科技", max_items: 4}
-      - {id: "business", name: "💼 商业", max_items: 3}
-      - {id: "lifestyle", name: "🌟 生活方式", max_items: 3}
-```
-
-### 9.6 配置导入导出
-
-**导出配置：**
-
-```bash
-$ python -m src.cli setup export --format yaml --output my-config.yaml
-✅ 配置已导出到: my-config.yaml
-```
-
-**导入配置：**
-
-```bash
-$ python -m src.cli setup import my-config.yaml
-📋 检测到配置文件，包含以下设置：
-   - 用户画像: 产品经理
-   - 兴趣标签: 5 个
-   - 日报分栏: 4 个
-
-📝 是否覆盖现有配置? [y/N]: y
-✅ 配置导入成功
-```
-
-### 9.5 交互式 LLM 配置
-
-提供友好的交互式向导，帮助用户配置大语言模型（LLM），支持多种提供商和模型选择。
-
-#### 9.5.1 LLM 配置命令
-
-```bash
-# 启动 LLM 配置向导
-$ python -m src.cli llm setup
-
-# 查看当前 LLM 配置
-$ python -m src.cli llm status
-
-# 测试 LLM 连接
-$ python -m src.cli llm test
-
-# 切换模型
-$ python -m src.cli llm switch
-
-# 查看支持的模型列表
-$ python -m src.cli llm models
-```
-
-#### 9.5.2 交互式配置流程
-
-```bash
-$ python -m src.cli llm setup
+✅ 日报设置完成！
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🤖 LLM 配置向导
+步骤 4/5: 🤖 LLM 配置（可选）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-本向导将帮助您配置大语言模型，用于：
-  • 智能内容摘要生成
-  • 内容质量评估
-  • 个性化推荐优化
-
-按 Enter 开始配置...
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-步骤 1/3: 选择 LLM 提供商
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+配置大语言模型以获得智能摘要、质量评估等增强功能。
+您也可以选择跳过，系统将使用规则-based 摘要。
 
 📝 选择 LLM 提供商：
 
    [1] 🌐 OpenAI (推荐)
-       模型: GPT-4o, GPT-4o-mini, GPT-4
+       模型: GPT-4o, GPT-4o-mini
        特点: 稳定、高质量、速度快
    
    [2] 🔗 OpenRouter
@@ -1856,8 +1619,8 @@ $ python -m src.cli llm setup
        特点: 聚合多厂商、性价比高
    
    [3] 🏠 Ollama (本地部署)
-       模型: Llama, Mistral, Qwen 等
-       特点: 免费、隐私安全、无需网络
+       模型: Llama, Mistral, Qwen
+       特点: 免费、隐私安全
    
    [4] ☁️ Azure OpenAI
        模型: GPT-4, GPT-3.5
@@ -1865,20 +1628,19 @@ $ python -m src.cli llm setup
    
    [5] 🌙 Kimi (Moonshot)
        模型: kimi-k2, moonshot-v1-128k
-       特点: 长文本处理专家，支持200万字上下文
+       特点: 长文本处理专家
    
    [6] 🔷 通义千问 (Qwen)
-       模型: qwen-max, qwen-plus, qwen-turbo
-       特点: 阿里出品，中文理解优秀，代码能力强
+       模型: qwen-max, qwen-plus
+       特点: 中文理解优秀
    
    [7] 🔶 智谱 GLM
-       模型: glm-4-plus, glm-4, glm-4-air
-       特点: 清华出品，国内最早的开源大模型
+       模型: glm-4-plus, glm-4
+       特点: 国内最早开源大模型
    
    [8] ⏭️  跳过 - 暂不配置 LLM
-       将使用规则摘要（功能受限）
 
-请选择 [1-6]: 1
+请选择 [1-8]: 1
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 步骤 2/3: 配置 API 密钥
@@ -1899,76 +1661,635 @@ $ python -m src.cli llm setup
 ✅ API Key 格式验证通过
 
 📝 选择默认模型：
-
-   [1] gpt-4o-mini (推荐)
-       性价比高，适合日常使用
-       价格: $0.15 / 1M tokens
-   
-   [2] gpt-4o
-       最强性能，适合重要内容
-       价格: $5.00 / 1M tokens
-   
-   [3] gpt-4-turbo
-       平衡性能与价格
-       价格: $10.00 / 1M tokens
+   [1] gpt-4o-mini (推荐) - 性价比高，适合日常使用
+   [2] gpt-4o - 最强性能，适合重要内容
+   [3] gpt-4-turbo - 平衡性能与价格
 
 请选择 [1-3]: 1
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-步骤 3/3: 功能配置
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 📝 启用 LLM 增强功能：
-
    [x] 智能摘要生成
-       使用 LLM 生成高质量内容摘要
-   
    [x] 内容质量评估
-       自动评估文章原创性、深度
-   
    [ ] 智能标签提取
-       自动提取精准内容标签
-   
    [ ] 个性化推荐优化
-       基于 LLM 的个性化排序
 
-是否启用上述功能？ [Y/n]: Y
-
-📝 摘要长度偏好：
-   [1] 简洁 - 一句话摘要
-   [2] 标准 - 3-5个要点
-   [3] 详细 - 完整段落摘要
-
-请选择 [1-3]: 2
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-配置预览
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  提供商: OpenAI
-  模型: gpt-4o-mini
-  API Key: sk-****-xxxx (已脱敏)
-  功能: 智能摘要、质量评估
-  摘要长度: 标准 (3-5要点)
-
-是否保存配置? [Y/n]: Y
-
-🧪 正在测试 API 连接...
-✅ 连接成功！模型 gpt-4o-mini 可用
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ LLM 配置完成！
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+步骤 5/5: 📤 推送渠道（可选）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-配置已保存到 .env 文件
+配置日报自动推送渠道。您也可以稍后通过 CLI 配置。
 
-💡 提示：
-  • 运行 'python -m src.cli llm status' 查看配置状态
-  • 运行 'python -m src.cli llm test' 测试连接
-  • 如需更改配置，重新运行 'python -m src.cli llm setup'
+📝 选择推送渠道：
+   [ ] Telegram
+   [ ] Slack
+   [ ] Discord
+   [ ] Email
+   [ ] 暂不配置
+
+请选择（空格分隔多个选项）: 1
+
+📝 Telegram 配置：
+   1. 在 @BotFather 创建 Bot，获取 Token
+   2. 在 @userinfobot 获取 Chat ID
+
+请输入 Bot Token: xxxx
+请输入 Chat ID: xxxx
+
+✅ Telegram 连接测试成功！
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 配置完成！
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 配置摘要：
+  👤 用户画像: 产品经理 @ 互联网/科技
+  🎯 兴趣标签: 6 个核心标签
+  📰 日报设置: 深度阅读型，4 个分栏
+  🤖 LLM: OpenAI / gpt-4o-mini
+  📤 推送: Telegram
+
+🚀 系统已准备就绪！
+
+💡 常用命令：
+  • 生成日报: python -m src.cli generate
+  • 查看状态: python -m src.cli status
+  • 修改配置: python -m src.cli setup
+
+按 Enter 启动服务...
 ```
 
-#### 9.5.3 LLM 提供商配置详情
+### 9.3 统一配置数据模型
+
+整合所有配置的统一数据结构，支持序列化和持久化。
+
+**完整配置数据模型：**
+
+```python
+@dataclass
+class UserConfiguration:
+    """用户统一配置模型"""
+    
+    # 基础信息
+    user_id: str = "default"
+    version: str = "1.0.0"
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    
+    # 用户画像
+    profile: UserProfile = field(default_factory=UserProfile)
+    
+    # 兴趣偏好
+    interests: InterestConfig = field(default_factory=InterestConfig)
+    
+    # 日报设置
+    daily: DailyConfig = field(default_factory=DailyConfig)
+    
+    # LLM 配置
+    llm: Optional[LLMConfig] = None
+    
+    # 推送渠道
+    channels: List[ChannelConfig] = field(default_factory=list)
+    
+    # 高级设置
+    advanced: AdvancedConfig = field(default_factory=AdvancedConfig)
+
+
+@dataclass
+class UserProfile:
+    """用户画像"""
+    industry: str = ""                    # 行业
+    position: str = ""                    # 职位
+    expertise: List[str] = field(default_factory=list)  # 专业领域
+    experience_level: str = "mid"         # junior/mid/senior/expert
+    company_size: str = "startup"         # startup/mid/enterprise
+    location: str = ""                    # 地理位置
+    daily_time_minutes: int = 20          # 每日阅读时间
+    preferred_time: str = "09:00"         # 偏好推送时间
+    timezone: str = "Asia/Shanghai"       # 时区
+
+
+@dataclass
+class InterestConfig:
+    """兴趣偏好配置"""
+    core_topics: List[TopicWeight] = field(default_factory=list)
+    content_types: List[str] = field(default_factory=list)
+    source_preferences: Dict[str, float] = field(default_factory=dict)
+    language_preference: str = "zh_first"  # zh/en/zh_first/en_first
+    content_depth: str = "medium"          # light/medium/deep
+    novelty_preference: str = "balanced"   # trending/balanced/timeless
+
+
+@dataclass
+class DailyConfig:
+    """日报配置"""
+    style: str = "detailed"               # brief/detailed/chat/data
+    columns: List[ColumnConfig] = field(default_factory=list)
+    filter_rules: FilterRules = field(default_factory=FilterRules)
+    summary: SummaryConfig = field(default_factory=SummaryConfig)
+
+
+@dataclass
+class LLMConfig:
+    """LLM 配置"""
+    provider: str = "openai"              # openai/openrouter/ollama/azure/moonshot/dashscope/zhipu
+    api_key: str = ""                     # API 密钥（加密存储）
+    base_url: Optional[str] = None        # 自定义 API 地址
+    model: str = "gpt-4o-mini"            # 默认模型
+    fallback_model: Optional[str] = None  # 备用模型
+    features: LLMFeatures = field(default_factory=LLMFeatures)
+    summary_length: str = "medium"        # short/medium/long
+
+
+@dataclass
+class ChannelConfig:
+    """推送渠道配置"""
+    type: str = ""                        # telegram/slack/discord/email
+    enabled: bool = True
+    config: Dict[str, str] = field(default_factory=dict)  # 渠道特定配置
+
+
+@dataclass 
+class AdvancedConfig:
+    """高级配置"""
+    auto_update: bool = True              # 自动更新采集规则
+    learning_enabled: bool = True         # 启用反馈学习
+    cache_ttl: int = 3600                 # 缓存时间（秒）
+    request_timeout: int = 30             # 请求超时（秒）
+    retry_attempts: int = 3               # 重试次数
+```
+
+**配置导出/导入格式（YAML）：**
+
+```yaml
+# user-config.yaml
+user_id: "default"
+version: "1.0.0"
+created_at: "2024-01-15T09:00:00Z"
+
+profile:
+  industry: "互联网/科技"
+  position: "产品经理"
+  expertise: ["AI", "大语言模型", "产品设计", "Python"]
+  experience_level: "senior"
+  daily_time_minutes: 20
+  preferred_time: "09:00"
+  timezone: "Asia/Shanghai"
+
+interests:
+  core_topics:
+    - name: "产品设计"
+      weight: 1.0
+    - name: "用户增长"
+      weight: 0.9
+    - name: "AI应用"
+      weight: 0.9
+  content_types: ["news", "analysis", "tutorial"]
+  source_preferences:
+    media: 0.8
+    community: 0.9
+    social: 0.7
+  language_preference: "zh_first"
+  content_depth: "medium"
+
+daily:
+  style: "detailed"
+  columns:
+    - id: "headlines"
+      name: "今日头条"
+      enabled: true
+      max_items: 3
+      order: 1
+    - id: "ai_tech"
+      name: "AI/技术"
+      enabled: true
+      max_items: 5
+      order: 2
+  filter_rules:
+    min_quality_score: 60
+    time_window_hours: 24
+    dedup_level: "medium"
+  summary:
+    method: "llm"
+    length: "medium"
+
+llm:
+  provider: "openai"
+  model: "gpt-4o-mini"
+  features:
+    summary: true
+    quality_check: true
+    tag_extraction: false
+    recommendation: false
+
+channels:
+  - type: "telegram"
+    enabled: true
+    config:
+      bot_token: "${TELEGRAM_BOT_TOKEN}"
+      chat_id: "${TELEGRAM_CHAT_ID}"
+```
+
+### 9.4 配置模板库
+
+提供开箱即用的预设模板，覆盖主流用户场景。模板可在配置向导中直接选择，或用于非交互式部署。
+
+**内置模板清单：**
+
+| 模板 ID | 名称 | 适用人群 | 特点 |
+|---------|------|----------|------|
+| `tech_developer` | 👨‍💻 技术开发者 | 程序员、架构师 | 关注开源、AI、工具 |
+| `product_manager` | 💼 产品经理 | PM、产品设计师 | 关注设计、增长、行业 |
+| `investor` | 💰 投资人 | VC、PE、分析师 | 关注市场、融资、财报 |
+| `business_analyst` | 📊 商业分析师 | 咨询、战略 | 关注行业研究、数据 |
+| `designer` | 🎨 设计师 | UI/UX、创意 | 关注趋势、工具、灵感 |
+| `general` | 📰 综合资讯 | 大众用户 | 平衡资讯 |
+| `minimal` | ⚡ 极简模式 | 时间有限 | 仅头条+摘要 |
+
+**模板详情：**
+
+```yaml
+# templates.yaml
+
+templates:
+  # 技术开发者模板
+  tech_developer:
+    name: "👨‍💻 技术开发者"
+    description: "专注技术趋势、开源项目、编程实践"
+    profile:
+      industry: "互联网/科技"
+      position: "技术开发者"
+      expertise: ["软件开发", "开源技术", "系统架构"]
+      daily_time_minutes: 30
+    interests:
+      core_topics:
+        - {name: "人工智能", weight: 1.0}
+        - {name: "大语言模型", weight: 0.95}
+        - {name: "开源项目", weight: 0.9}
+        - {name: "编程语言", weight: 0.85}
+        - {name: "云原生", weight: 0.8}
+      content_types: ["tutorial", "news", "analysis"]
+      source_preferences:
+        community: 0.9
+        media: 0.7
+        social: 0.6
+    daily:
+      style: "detailed"
+      columns:
+        - {id: "github", name: "🔥 GitHub 趋势", max_items: 5, order: 1}
+        - {id: "ai_tech", name: "🤖 AI/技术", max_items: 5, order: 2}
+        - {id: "dev_tools", name: "🛠️ 开发工具", max_items: 3, order: 3}
+        - {id: "tech_news", name: "📰 科技新闻", max_items: 3, order: 4}
+
+  # 产品经理模板
+  product_manager:
+    name: "💼 产品经理"
+    description: "关注产品设计、用户增长、行业动态"
+    profile:
+      industry: "互联网/科技"
+      position: "产品经理"
+      expertise: ["产品设计", "用户研究", "数据分析"]
+      daily_time_minutes: 20
+    interests:
+      core_topics:
+        - {name: "产品设计", weight: 1.0}
+        - {name: "用户增长", weight: 0.9}
+        - {name: "用户体验", weight: 0.9}
+        - {name: "商业模式", weight: 0.8}
+        - {name: "AI应用", weight: 0.85}
+      content_types: ["analysis", "product_review", "news"]
+    daily:
+      style: "brief"
+      columns:
+        - {id: "headlines", name: "🔥 今日头条", max_items: 3, order: 1}
+        - {id: "product_hunt", name: "🚀 Product Hunt", max_items: 5, order: 2}
+        - {id: "ai_apps", name: "🤖 AI应用", max_items: 4, order: 3}
+        - {id: "business", name: "💰 商业动态", max_items: 3, order: 4}
+
+  # 投资人模板
+  investor:
+    name: "💰 投资人"
+    description: "关注市场趋势、创业公司、财报数据"
+    profile:
+      industry: "金融/投资"
+      position: "投资人/分析师"
+      expertise: ["投资分析", "市场研究", "财务分析"]
+      daily_time_minutes: 25
+    interests:
+      core_topics:
+        - {name: "创业公司", weight: 1.0}
+        - {name: "投融资", weight: 0.95}
+        - {name: "市场趋势", weight: 0.9}
+        - {name: "财报分析", weight: 0.85}
+        - {name: "宏观经济", weight: 0.7}
+      content_types: ["news", "analysis"]
+    daily:
+      style: "data"
+      columns:
+        - {id: "market", name: "📈 市场动态", max_items: 5, order: 1}
+        - {id: "funding", name: "💰 融资信息", max_items: 5, order: 2}
+        - {id: "earnings", name: "📊 财报速递", max_items: 3, order: 3}
+        - {id: "analysis", name: "🔍 深度分析", max_items: 3, order: 4}
+
+  # 综合资讯模板
+  general:
+    name: "📰 综合资讯"
+    description: "平衡的科技、商业、社会资讯"
+    profile:
+      industry: "其他"
+      position: "其他"
+      expertise: []
+      daily_time_minutes: 15
+    interests:
+      core_topics:
+        - {name: "科技", weight: 0.8}
+        - {name: "商业", weight: 0.8}
+        - {name: "社会", weight: 0.6}
+        - {name: "文化", weight: 0.5}
+      content_types: ["news", "analysis"]
+    daily:
+      style: "brief"
+      columns:
+        - {id: "headlines", name: "🔥 今日头条", max_items: 5, order: 1}
+        - {id: "tech", name: "💻 科技", max_items: 4, order: 2}
+        - {id: "business", name: "💼 商业", max_items: 3, order: 3}
+        - {id: "lifestyle", name: "🌟 生活方式", max_items: 3, order: 4}
+
+  # 极简模式
+  minimal:
+    name: "⚡ 极简模式"
+    description: "仅保留核心内容，适合时间有限的用户"
+    profile:
+      daily_time_minutes: 5
+    interests:
+      core_topics:
+        - {name: "科技", weight: 1.0}
+        - {name: "商业", weight: 0.8}
+    daily:
+      style: "brief"
+      columns:
+        - {id: "headlines", name: "🔥 头条", max_items: 3, order: 1}
+      filter_rules:
+        min_quality_score: 75
+```
+
+**模板使用方式：**
+
+```bash
+# 交互式选择模板
+$ python -m src.cli setup
+> 选择 [1] 🚀 快速配置 - 选择预设模板
+> 选择模板 [2] 💼 产品经理
+
+# 命令行直接指定模板
+$ python -m src.cli setup --template product_manager
+
+# 非交互式部署
+$ python -m src.cli setup --non-interactive --template tech_developer
+
+# Docker 中使用模板
+$ docker run -e SETUP_TEMPLATE=product_manager daily-agent
+```
+
+### 9.5 配置持久化与热更新
+
+**配置存储架构：**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Configuration Layer                     │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Memory     │  │   Database   │  │    File      │      │
+│  │   (运行时)    │  │  (持久化)    │  │  (导入导出)   │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+│         └─────────────────┴─────────────────┘              │
+│                    Configuration Manager                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**配置持久化：**
+
+```python
+class ConfigurationManager:
+    """配置管理器 - 统一处理配置的读取、写入和热更新"""
+    
+    def __init__(self, db_session: AsyncSession):
+        self.db = db_session
+        self._cache: Dict[str, UserConfiguration] = {}
+        self._lock = asyncio.Lock()
+    
+    async def get_config(self, user_id: str) -> UserConfiguration:
+        """获取配置（优先从缓存）"""
+        if user_id in self._cache:
+            return self._cache[user_id]
+        
+        # 从数据库加载
+        config = await self._load_from_db(user_id)
+        self._cache[user_id] = config
+        return config
+    
+    async def save_config(self, user_id: str, config: UserConfiguration) -> None:
+        """保存配置到数据库并更新缓存"""
+        async with self._lock:
+            # 保存到数据库
+            await self._save_to_db(user_id, config)
+            # 更新缓存
+            self._cache[user_id] = config
+            # 触发配置变更事件
+            await self._emit_config_changed(user_id, config)
+    
+    async def update_partial(
+        self, 
+        user_id: str, 
+        updates: Dict[str, Any]
+    ) -> UserConfiguration:
+        """部分更新配置"""
+        config = await self.get_config(user_id)
+        
+        # 应用更新
+        for key, value in updates.items():
+            if hasattr(config, key):
+                setattr(config, key, value)
+        
+        config.updated_at = datetime.utcnow()
+        await self.save_config(user_id, config)
+        return config
+```
+
+**配置热更新：**
+
+```python
+# 配置变更监听器
+@app.post("/api/v1/config/reload")
+async def reload_config(
+    user_id: str = "default",
+    config_manager: ConfigurationManager = Depends(get_config_manager)
+):
+    """重新加载配置（热更新）"""
+    # 清除缓存
+    config_manager.invalidate_cache(user_id)
+    
+    # 重新加载
+    config = await config_manager.get_config(user_id)
+    
+    # 通知相关组件配置已变更
+    await event_bus.publish(ConfigReloadedEvent(user_id=user_id))
+    
+    return {"success": True, "message": "配置已重新加载"}
+
+# 前端实时同步（WebSocket）
+@router.websocket("/ws/config")
+async def config_websocket(websocket: WebSocket):
+    await websocket.accept()
+    
+    # 订阅配置变更事件
+    async for event in event_bus.subscribe(ConfigChangedEvent):
+        await websocket.send_json({
+            "type": "config_changed",
+            "user_id": event.user_id,
+            "changes": event.changes
+        })
+```
+
+**配置导入导出：**
+
+```bash
+# 导出配置
+$ python -m src.cli config export --user default --format yaml --output my-config.yaml
+✅ 配置已导出到: my-config.yaml
+
+# 导入配置
+$ python -m src.cli config import my-config.yaml
+📋 检测到配置文件，包含以下设置：
+   - 用户画像: 产品经理
+   - 兴趣标签: 5 个
+   - 日报分栏: 4 个
+
+📝 是否覆盖现有配置? [y/N]: y
+✅ 配置导入成功
+
+# 批量导出（备份）
+$ python -m src.cli config export --all --format json --output backup-$(date +%Y%m%d).json
+
+# 配置迁移
+$ python -m src.cli config export --user user1 | python -m src.cli config import --user user2
+```
+
+### 9.6 命令行配置管理
+
+提供完整的 CLI 工具用于配置管理，支持交互式和非交互式两种模式。
+
+**CLI 命令结构：**
+
+```bash
+# 主配置命令
+$ python -m src.cli setup [OPTIONS]
+
+# 配置管理子命令
+$ python -m src.cli config [COMMAND] [OPTIONS]
+
+# LLM 配置子命令
+$ python -m src.cli llm [COMMAND] [OPTIONS]
+```
+
+**setup 命令选项：**
+
+```bash
+# 交互式配置（默认）
+$ python -m src.cli setup
+
+# 使用预设模板
+$ python -m src.cli setup --template <template_id>
+
+# 非交互式配置
+$ python -m src.cli setup --non-interactive --config-file setup.yaml
+
+# 配置特定模块
+$ python -m src.cli setup --module profile      # 仅用户画像
+$ python -m src.cli setup --module interests    # 仅兴趣偏好
+$ python -m src.cli setup --module daily        # 仅日报设置
+$ python -m src.cli setup --module llm          # 仅 LLM 配置
+$ python -m src.cli setup --module channels     # 仅推送渠道
+$ python -m src.cli setup --all                 # 完整重新配置
+
+# 用户指定
+$ python -m src.cli setup --user <user_id>
+```
+
+**config 子命令：**
+
+```bash
+# 查看当前配置
+$ python -m src.cli config show
+$ python -m src.cli config show --user default --format yaml
+
+# 导出配置
+$ python -m src.cli config export --output my-config.yaml
+$ python -m src.cli config export --all --output backup.json
+
+# 导入配置
+$ python -m src.cli config import my-config.yaml
+$ python -m src.cli config import my-config.yaml --force
+
+# 配置验证
+$ python -m src.cli config validate
+$ python -m src.cli config validate --config-file setup.yaml
+
+# 重置配置
+$ python -m src.cli config reset --user default
+$ python -m src.cli config reset --all
+```
+
+**llm 子命令：**
+
+```bash
+# LLM 配置向导（整合在统一配置中，也可单独使用）
+$ python -m src.cli llm setup
+
+# 查看 LLM 配置
+$ python -m src.cli llm status
+
+# 测试 LLM 连接
+$ python -m src.cli llm test
+
+# 切换模型
+$ python -m src.cli llm switch
+
+# 查看支持的模型列表
+$ python -m src.cli llm models
+```
+
+**配置状态查看：**
+
+```bash
+$ python -m src.cli status
+
+🤖 Daily Agent 状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+服务状态:
+  运行状态:   ✅ 运行中
+  运行时间:   3 天 12 小时
+  版本:       1.0.0
+
+配置状态:
+  用户画像:   ✅ 已配置
+  兴趣偏好:   ✅ 已配置
+  日报设置:   ✅ 已配置
+  LLM 配置:   ✅ 已配置 (OpenAI/gpt-4o-mini)
+  推送渠道:   ✅ Telegram
+
+今日统计:
+  采集内容:   156 条
+  生成日报:   1 份
+  推送成功:   1 次
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### 9.7 LLM 提供商配置详情
 
 **OpenAI 配置：**
 ```yaml
@@ -2076,7 +2397,7 @@ secret_key: xxxxxxxx
 model: ernie-bot-4
 ```
 
-#### 9.5.4 多模型配置策略
+#### 9.7.1 多模型配置策略
 
 支持配置多个 LLM，按需切换：
 
@@ -2113,7 +2434,7 @@ usage_strategy:
   fallback_order: [default, fallback, local]  # 失败时 fallback
 ```
 
-#### 9.5.5 智能模型选择建议
+#### 9.7.2 智能模型选择建议
 
 系统根据场景自动推荐模型：
 
@@ -2126,7 +2447,7 @@ usage_strategy:
 | 离线环境 | Ollama 本地模型 | 无需网络连接 |
 | 预算敏感 | gpt-4o-mini / 本地模型 | 成本低 |
 
-#### 9.5.6 LLM 状态查看命令
+#### 9.7.3 LLM 状态查看命令
 
 ```bash
 $ python -m src.cli llm status
@@ -2154,7 +2475,7 @@ $ python -m src.cli llm status
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-#### 9.5.7 模型切换命令
+#### 9.7.4 模型切换命令
 
 ```bash
 $ python -m src.cli llm switch
@@ -2176,23 +2497,166 @@ $ python -m src.cli llm switch
 ✅ 模型可用
 ```
 
-### 9.6 冷启动推荐策略
+### 9.8 冷启动推荐策略
 
-对于新用户，系统提供多种冷启动方式：
+新用户首次使用时，系统没有历史数据支撑个性化推荐。提供多种冷启动策略，让用户快速获得有价值的日报体验。
 
-| 方式 | 描述 | 适用场景 |
-|------|------|----------|
-| **模板选择** | 选择预设模板快速开始 | 不确定具体偏好 |
-| **社交导入** | 从 Twitter/GitHub 导入关注 | 已有社交图谱 |
-| **阅读测试** | 展示10篇文章，根据反馈学习 | 希望精准定制 |
-| **手动配置** | 逐项详细设置 | 明确知道自己要什么 |
-| **热门推荐** | 先按热门内容推送，逐步学习 | 希望立即开始使用 |
+**冷启动策略矩阵：**
+
+| 策略 | 描述 | 配置时间 | 个性化程度 | 适用场景 |
+|------|------|----------|------------|----------|
+| **模板选择** | 选择预设模板快速开始 | 1 分钟 | ⭐⭐⭐ | 不确定具体偏好 |
+| **社交导入** | 从 Twitter/GitHub 导入关注 | 2 分钟 | ⭐⭐⭐⭐ | 已有社交图谱 |
+| **阅读测试** | 展示10篇文章，根据反馈学习 | 5 分钟 | ⭐⭐⭐⭐⭐ | 希望精准定制 |
+| **手动配置** | 逐项详细设置 | 5-10 分钟 | ⭐⭐⭐⭐⭐ | 明确知道自己要什么 |
+| **热门推荐** | 先按热门内容推送，逐步学习 | 0 分钟 | ⭐ | 希望立即开始使用 |
+
+**冷启动流程设计：**
+
+```python
+class ColdStartManager:
+    """冷启动管理器"""
+    
+    async def handle_new_user(self, user_id: str) -> ColdStartStrategy:
+        """
+        处理新用户冷启动
+        
+        流程：
+        1. 询问用户偏好（快速 vs 精准）
+        2. 根据选择执行对应策略
+        3. 生成第一份日报
+        4. 收集反馈并持续优化
+        """
+        
+        # 询问用户偏好
+        preference = await self.ask_user_preference()
+        
+        if preference == "quick":
+            # 快速开始 - 选择模板
+            return await self.template_strategy(user_id)
+        elif preference == "import":
+            # 社交导入
+            return await self.social_import_strategy(user_id)
+        elif preference == "test":
+            # 阅读测试
+            return await self.reading_test_strategy(user_id)
+        elif preference == "manual":
+            # 手动配置
+            return await self.manual_config_strategy(user_id)
+        else:
+            # 默认热门推荐
+            return await self.trending_strategy(user_id)
+    
+    async def template_strategy(self, user_id: str) -> Configuration:
+        """模板策略 - 最快速"""
+        # 展示模板列表
+        templates = self.get_available_templates()
+        selected = await self.prompt_template_selection(templates)
+        
+        # 应用模板
+        config = self.apply_template(selected)
+        
+        # 可选：微调
+        if await self.ask_for_customization():
+            config = await self.quick_customize(config)
+        
+        return config
+    
+    async def reading_test_strategy(self, user_id: str) -> Configuration:
+        """阅读测试策略 - 最精准"""
+        # 准备测试文章（覆盖不同主题）
+        test_articles = self.select_test_articles(
+            categories=["tech", "business", "science", "lifestyle"],
+            count=10
+        )
+        
+        # 用户反馈收集
+        feedback = []
+        for article in test_articles:
+            score = await self.ask_article_rating(article)
+            feedback.append({
+                "article_id": article.id,
+                "score": score,
+                "tags": article.tags
+            })
+        
+        # 基于反馈生成配置
+        config = self.generate_config_from_feedback(feedback)
+        
+        return config
+```
+
+**启动时冷启动检测：**
+
+```bash
+$ uvicorn src.main:app
+
+🚀 Daily Agent 启动中...
+📊 检测到新用户（无历史配置）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎉 欢迎首次使用 Daily Agent！
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+为了给您提供最佳的日报体验，请选择开始方式：
+
+   [1] 🚀 快速开始（1分钟）
+       选择预设模板，立即开始使用
+   
+   [2] 🎯 精准定制（5分钟）
+       通过阅读测试，训练您的专属推荐
+   
+   [3] 📝 手动配置（10分钟）
+       逐项详细设置，完全自定义
+   
+   [4] 🔥 立即体验（0分钟）
+       基于热门内容，后续逐步学习
+
+请选择 [1-4]: 1
+
+# 进入模板选择...
+```
+
+**冷启动后持续优化：**
+
+```python
+# 新用户前7天强化学习
+async def new_user_learning_phase(user_id: str, day: int):
+    """
+    新用户学习阶段
+    
+    Day 1-3: 高频收集反馈
+    - 每篇内容都询问是否感兴趣
+    - 快速建立初始画像
+    
+    Day 4-7: 验证和调整
+    - 减少反馈频率
+    - 验证推荐准确性
+    
+    Day 8+: 正常模式
+    - 转入常规推荐流程
+    """
+    
+    if day <= 3:
+        # 高频反馈
+        await enable_intensive_feedback(user_id)
+        # 每日推荐后询问
+        await schedule_daily_feedback_prompt(user_id)
+    elif day <= 7:
+        # 验证期
+        await reduce_feedback_frequency(user_id)
+        # 分析推荐准确率
+        await analyze_recommendation_accuracy(user_id)
+    else:
+        # 转入正常模式
+        await switch_to_normal_mode(user_id)
+```
 
 ---
 
 ## 10. OpenClaw Skill 规范
 
-### 9.1 Skill 定义与结构
+### 10.1 Skill 定义与结构
 
 ```yaml
 Skill:
@@ -2227,7 +2691,7 @@ Skill:
     models: ["gpt-4"]         # 需要的模型
 ```
 
-### 9.2 Skill 分类体系
+### 10.2 Skill 分类体系
 
 | 分类 | 说明 | 示例 |
 |------|------|------|
@@ -2238,7 +2702,7 @@ Skill:
 | **交互类 (Interactive)** | 用户交互与反馈 | 问答、指令处理、反馈收集 |
 | **编排类 (Orchestrator)** | 工作流编排与调度 | 任务调度、流程控制、异常处理 |
 
-### 9.3 Skill 开发规范
+### 10.3 Skill 开发规范
 
 #### 目录结构
 ```
@@ -2293,7 +2757,7 @@ skill-name/
 - v1.0.0: 初始版本
 ```
 
-### 9.4 Skill 注册与发现
+### 10.4 Skill 注册与发现
 
 ```json
 {
@@ -2318,7 +2782,7 @@ skill-name/
 }
 ```
 
-### 9.5 Skill 运行时接口
+### 10.5 Skill 运行时接口
 
 ```python
 # 标准接口定义
@@ -2354,7 +2818,7 @@ class Context:
     dependencies: dict  # 依赖的 Skill 实例
 ```
 
-### 9.6 Skill 组合与编排
+### 10.6 Skill 组合与编排
 
 ```yaml
 # 工作流定义示例
@@ -2402,7 +2866,7 @@ workflow:
     retry_delay: "5s"
 ```
 
-### 9.7 Skill 质量管理
+### 10.7 Skill 质量管理
 
 | 质量维度 | 指标 | 要求 |
 |----------|------|------|
