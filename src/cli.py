@@ -597,18 +597,25 @@ def auth_guide():
     console.print("以下渠道需要登录认证才能采集个性化内容:\n")
     
     for key, config in AUTH_CONFIGS.items():
+        # 小红书显示特殊提示
+        special_note = ""
+        if key == "xiaohongshu":
+            special_note = "\n[green]✨ 支持浏览器自动登录，无需手动复制 Cookie[/green]"
+        
         console.print(Panel(
             f"[bold]{config.display_name}[/bold] ([cyan]{key}[/cyan])\n"
             f"[dim]认证方式:[/dim] {config.auth_type}\n"
-            f"[dim]默认有效期:[/dim] {config.expires_days} 天\n\n"
+            f"[dim]默认有效期:[/dim] {config.expires_days} 天"
+            f"{special_note}\n\n"
             f"{config.help_text}",
             border_style="green"
         ))
     
     console.print("\n[bold]常用命令:[/bold]")
-    console.print("  [cyan]python -m src.cli auth list[/cyan]     - 查看已配置的认证")
-    console.print("  [cyan]python -m src.cli auth add jike[/cyan]  - 添加即刻认证")
-    console.print("  [cyan]python -m src.cli auth test jike[/cyan] - 测试即刻认证")
+    console.print("  [cyan]python -m src.cli auth list[/cyan]              - 查看已配置的认证")
+    console.print("  [cyan]python -m src.cli auth add jike[/cyan]           - 添加即刻认证")
+    console.print("  [cyan]python -m src.cli auth add xiaohongshu -b[/cyan] - 小红书浏览器自动登录")
+    console.print("  [cyan]python -m src.cli auth test jike[/cyan]          - 测试即刻认证")
 
 
 # ============ 启动设置向导命令 ============

@@ -4,7 +4,6 @@
 
 **Daily Agent** 是一个智能个性化日报信息收集系统，能够自动从多种数据源采集信息，通过 LLM 进行智能处理和摘要生成，根据用户画像进行个性化筛选和排序，最终输出多格式的日报内容。
 
-**项目名称**: openclaw-skills-daily  
 **项目语言**: 简体中文（代码注释和文档）  
 **技术栈**: Python 3.11+ / FastAPI / SQLAlchemy 2.0 (异步)  
 **许可证**: MIT License
@@ -24,28 +23,29 @@
 | 层级 | 技术 |
 |------|------|
 | **Web 框架** | FastAPI 0.104, Uvicorn 0.24 |
-| **数据验证** | Pydantic 2.5, Pydantic-Settings 2.1 |
+| **数据验证** | Pydantic 2.10, Pydantic-Settings 2.7 |
 | **数据库** | SQLite + SQLAlchemy 2.0 (异步) + aiosqlite |
 | **HTTP/采集** | httpx 0.25, aiohttp 3.9, feedparser 6.0, BeautifulSoup 4.12 |
 | **任务调度** | APScheduler 3.10 |
-| **NLP/文本** | jieba, scikit-learn 1.3, markdown, markdownify |
+| **NLP/文本** | jieba, scikit-learn 1.5, markdown, markdownify |
 | **配置管理** | python-dotenv, PyYAML, ruamel.yaml |
 | **CLI/UI** | Click 8.1, Rich 13.7 |
 | **安全** | cryptography 41.0 (Fernet 加密) |
-| **测试** | pytest 7.4, pytest-asyncio |
+| **测试** | pytest 7.4, pytest-asyncio 0.21 |
 
 ## 项目结构
 
 ```
 .
 ├── src/                          # 源代码目录
-│   ├── collector/                # 采集模块
+│   ├── collector/                # 采集模块（20+ 个采集器）
 │   │   ├── base.py               # 采集器基类和管理器 (BaseCollector, CollectorManager)
 │   │   ├── base_auth_collector.py # 带认证的采集器基类 (AuthenticatedCollector)
 │   │   ├── rss_collector.py      # RSS 采集器
 │   │   ├── api_collector.py      # API 采集器（HackerNews, GitHub Trending）
 │   │   ├── bilibili_collector.py # B站采集器
-│   │   ├── xiaohongshu_collector.py # 小红书采集器
+│   │   ├── xiaohongshu_collector.py # 小红书采集器（公开内容 + 认证采集器）
+│   │   ├── xiaohongshu_auth.py      # 小红书交互式鉴权模块（Playwright）
 │   │   ├── zhihu_collector.py    # 知乎采集器
 │   │   ├── jike_collector.py     # 即刻采集器
 │   │   ├── podcast_collector.py  # 播客采集器（小宇宙、喜马拉雅等）
@@ -74,6 +74,7 @@
 │   ├── scheduler.py              # 任务调度器 (TaskScheduler, DailyTaskManager)
 │   ├── cli.py                    # 命令行工具 (Click)
 │   ├── auth_manager.py           # 认证管理（Cookie/Token 加密存储）
+│   ├── browser_auth.py             # 浏览器自动化认证（Playwright）
 │   ├── llm_config.py             # LLM 配置管理
 │   └── setup_wizard.py           # 交互式设置向导
 ├── config/                       # 配置文件目录
@@ -88,6 +89,7 @@
 ├── Dockerfile                    # Docker 镜像构建（Python 3.11-slim）
 ├── requirements.txt              # Python 依赖
 ├── start.sh                      # 启动脚本
+├── docker-entrypoint.sh          # Docker 入口脚本
 ├── .env.example                  # 环境变量示例
 └── pytest.ini                   # pytest 配置
 ```
@@ -98,7 +100,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/uhajivis-cell/openclaw-skills-daily.git
+git clone <repository-url>
 cd openclaw-skills-daily
 
 # 2. 配置环境变量
@@ -118,6 +120,12 @@ docker-compose logs -f
 # 停止服务
 docker-compose down
 ```
+
+Docker 支持两种启动模式：
+- **Fast 模式**: `STARTUP_MODE=fast` - 零配置快速启动
+- **Configure 模式**: `STARTUP_MODE=configure` - 完整配置（需在本地完成配置后挂载）
+
+支持预设模板：`SETUP_TEMPLATE=tech_developer|product_manager|investor|business_analyst|designer|general`
 
 ### 方式二：本地运行
 
@@ -223,6 +231,53 @@ columns:
 
 配置支持热更新：通过 API `POST /api/v1/reload` 重新加载配置，无需重启服务。
 
+### 小红书交互式鉴权（推荐）
+
+小红书有严格的反爬机制，推荐使用浏览器自动登录方式获取 Cookie：
+
+```bash
+# 方式1：使用 CLI 工具（推荐）
+python -m src.cli auth add xiaohongshu -b
+
+# 方式2：直接运行鉴权模块
+python -m src.collector.xiaohongshu_auth
+
+# 方式3：在代码中使用
+from src.collector.xiaohongshu_auth import xhs_login_interactive
+
+success = await xhs_login_interactive(headless=False, save_to_db=True)
+```
+
+浏览器自动登录流程：
+1. 自动启动带反检测配置的 Chromium 浏览器
+2. 打开小红书登录页面
+3. 等待用户完成登录（支持扫码/手机号/验证码）
+4. 自动检测登录成功状态
+5. 提取并加密保存 Cookie 到数据库
+
+特点：
+- **反检测**：注入脚本隐藏自动化特征（webdriver、plugins、chrome 对象伪装）
+- **自动检测**：实时检测登录态关键字段（webId、xhsTrackerId、session）
+- **用户识别**：自动提取用户昵称
+- **安全存储**：使用 Fernet 加密保存到数据库
+
+### 代码示例：小红书认证采集器
+
+```python
+from src.collector.xiaohongshu_collector import XiaohongshuAuthenticatedCollector
+
+# 创建关注流采集器
+config = {
+    "collect_type": "following",  # following, recommend
+    "limit": 20
+}
+collector = XiaohongshuAuthenticatedCollector(config)
+
+# 执行采集（自动加载认证信息）
+result = await collector.collect()
+print(f"采集到 {len(result.items)} 条内容")
+```
+
 ## CLI 工具
 
 项目提供丰富的命令行工具：
@@ -247,10 +302,13 @@ python -m src.cli verify
 python -m src.cli init
 
 # 认证管理（配置需要登录的渠道）
-python -m src.cli auth list          # 列出已配置的认证
-python -m src.cli auth add jike      # 添加即刻认证（交互式）
-python -m src.cli auth test jike     # 测试认证
-python -m src.cli auth remove jike   # 删除认证
+python -m src.cli auth list                   # 列出已配置的认证
+python -m src.cli auth add jike               # 添加即刻认证（交互式）
+python -m src.cli auth add xiaohongshu -b     # 添加小红书认证（浏览器自动登录）
+python -m src.cli auth add xiaohongshu -m     # 添加小红书认证（手动粘贴 cURL）
+python -m src.cli auth test jike              # 测试认证
+python -m src.cli auth remove jike            # 删除认证
+python -m src.cli auth guide                  # 查看认证配置指南
 
 # LLM 配置
 python -m src.cli llm setup          # 启动 LLM 配置向导
@@ -401,14 +459,8 @@ python -m src.cli setup import       # 导入用户配置
 - [x] 认证管理（支持需要登录的渠道）
 
 待开发功能：
-- [ ] Playwright 网页采集增强
+- [x] Playwright 网页采集增强（小红书交互式鉴权）
 - [ ] 智能问答交互
 - [ ] 管理后台 Web UI
 - [ ] 多租户支持
 - [ ] 多语言界面
-
-## 相关链接
-
-- 项目主页: https://github.com/uhajivis-cell/openclaw-skills-daily
-- 能力图谱文档: [perfect-daily-agent.md](perfect-daily-agent.md)
-- API 文档: http://localhost:8080/docs (服务启动后)

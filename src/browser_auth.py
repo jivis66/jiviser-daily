@@ -1,6 +1,14 @@
 """
 浏览器自动化认证模块
 使用 Playwright 自动获取 Cookie
+
+支持平台：
+- 即刻 (jike)
+- 小红书 (xiaohongshu) - 使用专门的 xiaohongshu_auth 模块
+- 知乎 (zhihu)
+- B站 (bilibili)
+- 微博 (weibo)
+- 抖音 (douyin)
 """
 import asyncio
 from typing import Dict, Optional, Tuple
@@ -269,6 +277,8 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
     """
     交互式认证入口
     
+    针对小红书使用专门的 xiaohongshu_auth 模块，提供更好的反检测支持和自动登录检测。
+    
     Args:
         source_name: 渠道名称
         username: 用户名（可选）
@@ -276,6 +286,11 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
     Returns:
         (成功, 消息)
     """
+    # 小红书使用专门的鉴权模块（更好的反检测和自动登录检测）
+    if source_name == "xiaohongshu":
+        return await _xiaohongshu_interactive_auth(username)
+    
+    # 其他平台使用通用认证助手
     helper = BrowserAuthHelper(source_name)
     
     # 获取 cookie
@@ -295,9 +310,9 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
     success, message = await manager.add_auth(source_name, curl_cmd, username)
     
     if success:
-        # 对于小红书等有严格反爬机制的平台，跳过 HTTP 测试
+        # 对于有严格反爬机制的平台，跳过 HTTP 测试
         # 因为需要动态签名，无法通过简单 cURL 验证
-        if source_name in ['xiaohongshu', 'douyin']:
+        if source_name in ['douyin']:
             return True, "认证信息已保存（浏览器自动获取的 Cookie 通常可直接使用）"
         
         # 其他平台尝试 HTTP 测试
@@ -308,3 +323,73 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
             return True, f"Cookie 已保存，但测试未通过: {test_msg}"
     else:
         return False, message
+
+
+async def _xiaohongshu_interactive_auth(username: str = None) -> Tuple[bool, str]:
+    """
+    小红书专门的交互式认证
+    
+    使用 xiaohongshu_auth 模块，提供：
+    - 更强的反检测能力
+    - 自动登录检测
+    - 用户信息提取
+    - 更好的错误处理
+    """
+    try:
+        from src.collector.xiaohongshu_auth import XiaohongshuAuthManager
+        
+        manager = XiaohongshuAuthManager()
+        
+        # 执行交互式登录
+        auth_data = await manager.login_interactive(
+            headless=False,
+            timeout=300,
+            on_status=lambda msg: print(f"[小红书登录] {msg}")
+        )
+        
+        if not auth_data:
+            return False, "登录失败或用户取消"
+        
+        # 保存到数据库
+        success = await manager.save_to_database(auth_data)
+        
+        if success:
+            user_info = auth_data.user_info
+            if user_info and user_info.get("nickname"):
+                return True, f"小红书认证成功！用户: {user_info['nickname']}"
+            else:
+                return True, "小红书认证成功！"
+        else:
+            return False, "登录成功但保存失败"
+            
+    except ImportError as e:
+        return False, (
+            f"小红书认证模块加载失败: {e}\n"
+            "请确保已安装 playwright:\n"
+            "  pip install playwright\n"
+            "  python -m playwright install chromium"
+        )
+    except Exception as e:
+        return False, f"小红书认证失败: {str(e)}"
+
+
+# 便捷函数
+def is_browser_auth_available() -> bool:
+    """检查浏览器认证是否可用（Playwright 是否已安装）"""
+    try:
+        import playwright
+        return True
+    except ImportError:
+        return False
+
+
+async def quick_auth_xiaohongshu() -> Tuple[bool, str]:
+    """
+    小红书快速认证便捷函数
+    
+    非交互式调用，自动执行登录流程。
+    
+    Returns:
+        (成功, 消息)
+    """
+    return await interactive_auth("xiaohongshu")

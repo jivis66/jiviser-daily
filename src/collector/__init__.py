@@ -80,6 +80,29 @@ from src.collector.base_auth_collector import (
     BilibiliAuthenticatedCollector,
 )
 
+# 小红书交互式鉴权模块（可选，需要 playwright）
+try:
+    from src.collector.xiaohongshu_auth import (
+        XHSAuthData,
+        XiaohongshuAuthHelper,
+        XiaohongshuAuthManager,
+        XHSAuthError,
+        XHSLoginTimeoutError,
+        XHSLoginFailedError,
+        xhs_login_interactive,
+    )
+    _XHS_AUTH_AVAILABLE = True
+except ImportError:
+    # playwright 未安装时跳过
+    _XHS_AUTH_AVAILABLE = False
+    XHSAuthData = None
+    XiaohongshuAuthHelper = None
+    XiaohongshuAuthManager = None
+    XHSAuthError = None
+    XHSLoginTimeoutError = None
+    XHSLoginFailedError = None
+    xhs_login_interactive = None
+
 __all__ = [
     # 基础组件
     "BaseCollector",
@@ -151,4 +174,13 @@ __all__ = [
     "XiaohongshuAuthenticatedCollector",
     "ZhihuAuthenticatedCollector",
     "BilibiliAuthenticatedCollector",
+    
+    # 小红书交互式鉴权模块（可选）
+    "XHSAuthData",
+    "XiaohongshuAuthHelper",
+    "XiaohongshuAuthManager",
+    "XHSAuthError",
+    "XHSLoginTimeoutError",
+    "XHSLoginFailedError",
+    "xhs_login_interactive",
 ]
