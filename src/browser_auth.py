@@ -1,0 +1,173 @@
+"""
+浏览器自动化认证模块
+使用 Playwright 自动获取 Cookie
+"""
+import asyncio
+from typing import Optional, Tuple
+
+from playwright.async_api import async_playwright, Page
+
+from src.auth_manager import get_auth_manager, AUTH_CONFIGS
+
+
+class BrowserAuthHelper:
+    """浏览器认证助手"""
+    
+    def __init__(self, source_name: str):
+        self.source_name = source_name
+        self.config = AUTH_CONFIGS.get(source_name)
+        self.cookie_str: Optional[str] = None
+        
+    async def get_cookie_interactive(self) -> Tuple[bool, str]:
+        """
+        交互式获取 Cookie
+        
+        Returns:
+            (成功, cookie字符串或错误信息)
+        """
+        if not self.config:
+            return False, f"不支持的渠道: {self.source_name}"
+        
+        # 检查 Playwright 是否已安装
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            return False, """Playwright 未安装，请运行:
+    pip install playwright
+    python -m playwright install chromium
+"""
+        
+        async with async_playwright() as p:
+            # 启动浏览器
+            browser = await p.chromium.launch(headless=False)
+            context = await browser.new_context(
+                viewport={"width": 1280, "height": 800}
+            )
+            page = await context.new_page()
+            
+            print(f"\n{'='*60}")
+            print(f"正在为 [{self.config.display_name}] 获取认证信息")
+            print(f"{'='*60}\n")
+            print(f"1. 浏览器已启动，请登录您的账号")
+            print(f"2. 登录成功后，返回终端并按 Enter 确认")
+            print(f"3. 系统将自动提取 Cookie\n")
+            
+            # 打开登录页面
+            await page.goto(self.config.login_url)
+            
+            # 等待用户登录完成
+            input("登录完成后请按 Enter 键...")
+            
+            try:
+                # 提取 cookie
+                cookies = await context.cookies()
+                cookie_dict = {c['name']: c['value'] for c in cookies}
+                
+                if not cookie_dict:
+                    await browser.close()
+                    return False, "未能获取到 Cookie，请检查是否已登录"
+                
+                # 转换为字符串格式
+                self.cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
+                
+                # 尝试获取用户信息
+                user_info = await self._try_get_user_info(page)
+                
+                await browser.close()
+                
+                if user_info:
+                    print(f"\n检测到用户信息: {user_info}")
+                
+                return True, self.cookie_str
+                
+            except Exception as e:
+                await browser.close()
+                return False, f"获取 Cookie 失败: {e}"
+    
+    async def _try_get_user_info(self, page: Page) -> Optional[str]:
+        """尝试获取用户昵称"""
+        try:
+            # 小红书
+            if self.source_name == "xiaohongshu":
+                # 尝试从页面获取用户信息
+                try:
+                    await page.goto("https://www.xiaohongshu.com/user/profile")
+                    await asyncio.sleep(1)
+                    nickname = await page.locator(".nickname").first.text_content(timeout=3000)
+                    return nickname
+                except:
+                    pass
+            
+            # 知乎
+            elif self.source_name == "zhihu":
+                try:
+                    await page.goto("https://www.zhihu.com/people/me")
+                    await asyncio.sleep(1)
+                    name = await page.locator(".ProfileHeader-name").first.text_content(timeout=3000)
+                    return name
+                except:
+                    pass
+            
+            # 即刻
+            elif self.source_name == "jike":
+                try:
+                    await page.goto("https://web.okjike.com/")
+                    await asyncio.sleep(1)
+                    name = await page.locator(".user-name").first.text_content(timeout=3000)
+                    return name
+                except:
+                    pass
+                    
+        except:
+            pass
+        
+        return None
+    
+    def get_curl_command(self) -> str:
+        """生成 cURL 命令"""
+        if not self.cookie_str:
+            return ""
+        
+        # 构建简单的 cURL 命令
+        url = self.config.test_endpoint if self.config else "https://example.com"
+        return f"curl '{url}' -H 'Cookie: {self.cookie_str}' -H 'User-Agent: Mozilla/5.0'"
+
+
+async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool, str]:
+    """
+    交互式认证入口
+    
+    Args:
+        source_name: 渠道名称
+        username: 用户名（可选）
+        
+    Returns:
+        (成功, 消息)
+    """
+    helper = BrowserAuthHelper(source_name)
+    
+    # 获取 cookie
+    success, result = await helper.get_cookie_interactive()
+    
+    if not success:
+        return False, result
+    
+    # 保存到数据库
+    from src.auth_manager import get_auth_manager
+    manager = get_auth_manager()
+    
+    # 构造 cURL 命令
+    curl_cmd = helper.get_curl_command()
+    
+    # 添加认证
+    success, message = await manager.add_auth(source_name, curl_cmd, username)
+    
+    if success:
+        # 测试认证
+        is_valid, test_msg, user_info = await manager.test_auth(source_name)
+        if is_valid:
+            return True, f"认证成功并已保存。{test_msg}"
+        else:
+            return True, f"Cookie 已保存，但测试未通过: {test_msg}"
+    else:
+        return False, message

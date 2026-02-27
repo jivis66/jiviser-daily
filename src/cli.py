@@ -410,7 +410,9 @@ def auth_list():
 @auth.command("add")
 @click.argument("source_name")
 @click.option("--username", "-u", help="用户名（可选）")
-def auth_add(source_name: str, username: str = None):
+@click.option("--browser", "-b", is_flag=True, help="使用浏览器自动获取（推荐）")
+@click.option("--manual", "-m", is_flag=True, help="手动粘贴 cURL")
+def auth_add(source_name: str, username: str = None, browser: bool = False, manual: bool = False):
     """添加认证配置"""
     from src.auth_manager import get_auth_manager, AUTH_CONFIGS
     
@@ -424,57 +426,77 @@ def auth_add(source_name: str, username: str = None):
             click.echo(f"  • {key} - {cfg.display_name}")
         return
     
-    # 显示帮助信息
-    click.echo(f"\n{'='*60}")
-    click.echo(f"正在为 [{config.display_name}] 配置认证信息")
-    click.echo(f"{'='*60}\n")
-    click.echo(config.help_text)
-    click.echo("\n提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串")
+    # 选择方式
+    if not browser and not manual:
+        click.echo(f"\n{'='*60}")
+        click.echo(f"正在为 [{config.display_name}] 配置认证信息")
+        click.echo(f"{'='*60}\n")
+        click.echo("请选择获取方式:")
+        click.echo("  [1] 🌐 浏览器自动获取（推荐）- 自动登录并提取 Cookie")
+        click.echo("  [2] 📋 手动粘贴 cURL - 从浏览器开发者工具复制")
+        choice = click.prompt("请选择", type=str, default="1")
+        browser = choice == "1"
+        manual = choice == "2"
     
-    # 获取输入
+    if browser:
+        # 浏览器自动获取
+        _auth_add_browser(source_name, username)
+    else:
+        # 手动粘贴
+        _auth_add_manual(source_name, username)
+
+
+def _auth_add_browser(source_name: str, username: str = None):
+    """使用浏览器自动获取 Cookie"""
+    async def _run():
+        from src.browser_auth import interactive_auth
+        success, message = await interactive_auth(source_name, username)
+        if success:
+            click.echo(f"\n✓ {message}")
+        else:
+            click.echo(f"\n✗ {message}")
+    
+    asyncio.run(_run())
+
+
+def _auth_add_manual(source_name: str, username: str = None):
+    """手动粘贴 cURL"""
+    from src.auth_manager import get_auth_manager
+    
+    manager = get_auth_manager()
+    config = manager.get_config(source_name)
+    
     click.echo("\n" + "-"*40)
-    click.echo("请输入 cURL 命令或 Cookie 字符串")
-    click.echo("支持两种方式:")
-    click.echo("  1. 单行: 直接粘贴，按 Enter")
-    click.echo("  2. 多行: 粘贴后将所有 \\ 和换行去掉，合并为一行")
+    click.echo(config.help_text)
     click.echo("-"*40)
+    click.echo("\n请粘贴 cURL 命令或 Cookie 字符串:")
     
-    # 使用标准 input 更可靠
     try:
-        click.echo("")  # 空行提示
-        curl_command = input("粘贴 > ").strip()
+        curl_command = input("> ").strip()
     except (EOFError, KeyboardInterrupt):
         click.echo("\n已取消")
         return
     
-    # 清理输入
     curl_command = curl_command.replace("\\", "")
     
     if not curl_command:
         click.echo("输入为空，取消配置")
         return
     
-    # 异步部分：保存和测试
     async def _save_and_test():
-        click.echo("正在保存认证配置...")
+        click.echo("正在保存...")
         success, message = await manager.add_auth(source_name, curl_command, username)
         
         if success:
-            click.echo(f"\n✓ {message}")
-            
-            # 自动测试
-            click.echo("\n正在测试认证...")
-            is_valid, test_msg, user_info = await manager.test_auth(source_name)
-            
+            click.echo(f"✓ {message}")
+            click.echo("正在测试...")
+            is_valid, test_msg, _ = await manager.test_auth(source_name)
             if is_valid:
-                click.echo(f"✓ 认证测试通过: {test_msg}")
-                if user_info and user_info.get("username"):
-                    click.echo(f"  用户名: {user_info['username']}")
+                click.echo(f"✓ 测试通过")
             else:
-                click.echo(f"⚠ 认证测试失败: {test_msg}")
-                click.echo("配置已保存，但可能无法正常使用，请检查 Cookie 是否有效")
+                click.echo(f"⚠ 测试未通过: {test_msg}")
         else:
-            click.echo(f"\n✗ {message}")
+            click.echo(f"✗ {message}")
     
     asyncio.run(_save_and_test())
 
