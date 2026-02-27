@@ -50,6 +50,19 @@ uvicorn src.main:app --reload
 
 ---
 
+## ✨ 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| 🤖 **交互式登录** | 支持小红书等平台的浏览器自动登录，自动检测登录成功 |
+| 🛡️ **反检测** | 注入反检测脚本，绕过平台的自动化检测 |
+| 🔐 **安全存储** | Cookie/Token 使用 Fernet 加密，密钥派生自配置 |
+| 📰 **智能日报** | 多源采集 → 智能筛选 → 个性化排序 → 多格式输出 |
+| 🎯 **个性化** | 用户画像 + 兴趣偏好 + 反馈学习 |
+| ⏰ **定时推送** | 支持每日定时生成和推送到多种渠道 |
+
+---
+
 ## ⚡ 双模式启动
 
 首次启动时，系统会检测配置状态并引导你选择：
@@ -326,7 +339,11 @@ columns:
 支持的数据源类型：
 - **RSS**: 任意 RSS/Atom 订阅源
 - **API**: Hacker News、GitHub Trending、NewsAPI 等
-- **社交媒体**: B站、知乎、即刻、小红书（部分需 Cookie 认证）
+- **社交媒体**: 
+  - B站（热门/搜索）
+  - 知乎（热榜/搜索）
+  - 即刻（需认证）
+  - 小红书（公开内容/关注流需认证）
 
 配置修改后热更新（无需重启）：
 ```bash
@@ -337,30 +354,68 @@ curl -X POST http://localhost:8080/api/v1/reload
 
 ## 🔐 私有渠道认证
 
-对于需要登录的渠道（即刻、小红书等），使用 CLI 工具配置：
+对于需要登录的渠道（即刻、小红书、知乎等），提供两种配置方式：
+
+### 方式一：浏览器自动登录（推荐小红书）
+
+小红书等平台的交互式浏览器登录，自动获取并加密存储 Cookie：
+
+```bash
+# 小红书 - 浏览器自动登录（自动检测登录成功）
+python -m src.cli auth add xiaohongshu -b
+
+# 其他平台（即刻、知乎等）
+python -m src.cli auth add jike -b
+python -m src.cli auth add zhihu -b
+```
+
+流程：启动浏览器 → 用户完成登录 → 自动提取 Cookie → 加密保存到数据库
+
+特点：
+- ✅ 自动检测登录成功（无需手动按 Enter）
+- ✅ 反检测脚本（隐藏自动化特征）
+- ✅ Cookie 加密存储
+- ✅ 支持扫码/手机号/验证码登录
+
+**依赖要求**（首次使用）：
+```bash
+pip install playwright
+python -m playwright install chromium
+```
+
+### 方式二：手动粘贴 cURL
+
+适用于所有平台：
+
+```bash
+# 添加认证（手动模式）
+python -m src.cli auth add jike -m
+python -m src.cli auth add xiaohongshu -m
+python -m src.cli auth add zhihu -m
+```
+
+Cookie 获取方式：
+1. 浏览器登录目标网站（如 [web.okjike.com](https://web.okjike.com)）
+2. F12 打开开发者工具 → Network 标签
+3. 刷新页面，找到任意 API 请求
+4. 右键 → Copy → Copy as cURL
+5. 粘贴到 CLI 提示中
+
+### 认证管理命令
 
 ```bash
 # 列出已配置的认证
 python -m src.cli auth list
 
-# 添加认证（交互式）
-python -m src.cli auth add jike
-python -m src.cli auth add xiaohongshu
-python -m src.cli auth add zhihu
-
 # 测试认证状态
-python -m src.cli auth test jike
+python -m src.cli auth test xiaohongshu
 
 # 删除认证
-python -m src.cli auth remove jike
-```
+python -m src.cli auth remove xiaohongshu
 
-Cookie 获取方式（以即刻为例）：
-1. 浏览器登录 [web.okjike.com](https://web.okjike.com)
-2. F12 打开开发者工具 → Network 标签
-3. 刷新页面，找到任意 API 请求
-4. 右键 → Copy → Copy as cURL
-5. 粘贴到 CLI 提示中
+# 查看认证配置指南
+python -m src.cli auth guide
+```
 
 ---
 
@@ -396,20 +451,28 @@ curl -X POST http://localhost:8080/api/v1/feedback \
 
 ```
 .
-├── src/                    # 源代码
-│   ├── collector/          # 采集模块（RSS/API/社交媒体）
-│   ├── processor/          # 处理模块（清洗/摘要/分类）
-│   ├── filter/             # 筛选排序模块
-│   ├── output/             # 输出模块（格式化/推送）
-│   ├── personalization/    # 个性化模块（画像/学习）
-│   ├── cli.py              # 命令行工具
-│   └── main.py             # FastAPI 入口
-├── config/                 # 配置文件
-│   ├── columns.yaml        # 日报分栏配置
-│   └── templates.yaml      # 用户画像模板
-├── data/                   # 数据目录（SQLite）
-├── docker-compose.yml      # Docker 部署
-└── requirements.txt        # Python 依赖
+├── src/                          # 源代码
+│   ├── collector/                # 采集模块
+│   │   ├── base.py               # 采集器基类
+│   │   ├── xiaohongshu_collector.py  # 小红书采集器
+│   │   ├── xiaohongshu_auth.py   # 小红书交互式鉴权（Playwright）
+│   │   └── ...                   # 其他采集器
+│   ├── processor/                # 处理模块（清洗/摘要/分类）
+│   ├── filter/                   # 筛选排序模块
+│   ├── output/                   # 输出模块（格式化/推送）
+│   ├── personalization/          # 个性化模块（画像/学习）
+│   ├── auth_manager.py           # 认证管理（Cookie/Token 加密）
+│   ├── browser_auth.py           # 浏览器自动化认证
+│   ├── cli.py                    # 命令行工具
+│   └── main.py                   # FastAPI 入口
+├── config/                       # 配置文件
+│   ├── columns.yaml              # 日报分栏配置
+│   └── templates.yaml            # 用户画像模板
+├── docs/                         # 文档
+│   └── XIAOHONGSHU_AUTH.md       # 小红书鉴权详细文档
+├── data/                         # 数据目录（SQLite）
+├── docker-compose.yml            # Docker 部署
+└── requirements.txt              # Python 依赖
 ```
 
 ---
@@ -476,6 +539,24 @@ python -m src.cli config export --user alice --output alice-config.yaml
 python -m src.cli config import alice-config.yaml --user bob
 ```
 
+### 小红书认证采集
+
+配置小红书认证后，采集关注流内容：
+
+```bash
+# 1. 配置小红书认证（浏览器自动登录）
+python -m src.cli auth add xiaohongshu -b
+
+# 2. 在 config/columns.yaml 中添加关注流数据源
+#    collector: xiaohongshu_feed
+#    auth_source: xiaohongshu
+
+# 3. 手动触发采集测试
+python -m src.cli collect
+```
+
+更多详情参见 [docs/XIAOHONGSHU_AUTH.md](docs/XIAOHONGSHU_AUTH.md)
+
 ---
 
 ## ❓ 常见问题
@@ -499,6 +580,19 @@ A: 编辑 `config/columns.yaml`，在对应分栏下添加 `type: rss` 的数据
 **Q: 推送失败怎么排查？**
 
 A: 使用 `python -m src.cli auth test <channel>` 测试渠道连接，或查看日志 `docker-compose logs -f`。
+
+**Q: 小红书认证失败怎么办？**
+
+A: 1) 确保已安装 Playwright: `pip install playwright && python -m playwright install chromium`
+2) 使用浏览器自动登录: `python -m src.cli auth add xiaohongshu -b`
+3) 如果浏览器登录失败，可尝试手动方式: `python -m src.cli auth add xiaohongshu -m`
+
+**Q: 为什么小红书需要特殊处理？**
+
+A: 小红书有严格的反爬机制，普通 HTTP 请求容易被拦截。交互式浏览器登录可以：
+- 模拟真实用户行为
+- 自动处理反检测
+- 获取完整的登录态 Cookie
 
 ---
 
