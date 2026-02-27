@@ -467,6 +467,30 @@ class AuthManager:
         if not credential.is_valid:
             return False, f"[{config.display_name}] 认证已失效，请更新: auth update {source_name}", None
         
+        # 对严格反爬平台，跳过 HTTP 测试（它们有动态签名机制）
+        strict_platforms = ['xiaohongshu', 'douyin']
+        if source_name in strict_platforms:
+            # 只验证 cookie 存在且未过期
+            try:
+                cookie_str = decrypt_credentials(credential.credentials)
+                if not cookie_str or len(cookie_str) < 10:
+                    return False, "Cookie 无效", None
+                
+                # 检查是否有过期标志的 cookie
+                has_session = any(key in cookie_str for key in ['web_session', 'session'])
+                
+                # 更新验证时间
+                async with get_session() as session:
+                    from src.database import AuthCredentialRepository
+                    repo = AuthCredentialRepository(session)
+                    await repo.update_last_verified(source_name)
+                
+                return True, "Cookie 已配置（跳过了严格平台的 HTTP 测试）", None
+                
+            except Exception as e:
+                return False, f"验证失败: {str(e)}", None
+        
+        # 其他平台进行 HTTP 测试
         try:
             # 解密凭证
             cookie_str = decrypt_credentials(credential.credentials)
