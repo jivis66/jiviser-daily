@@ -434,23 +434,29 @@ def auth_add(source_name: str, username: str = None):
             border_style="blue"
         ))
         
-        # 获取输入 - 一次性读取所有粘贴内容
+        # 获取输入
         console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
-        console.print("[dim](粘贴后按 Enter，Windows 按 Ctrl+Z 然后 Enter，Mac/Linux 按 Ctrl+D 结束)\n[/dim]")
+        console.print("[dim](支持单行/多行，输入 'done' 或按 Ctrl+D/Z 结束)\n[/dim]")
         
-        import sys
+        lines = []
         try:
-            # 读取所有输入直到 EOF
-            console.print("[dim]等待输入...[/dim]")
-            data = sys.stdin.read()
-            curl_command = data.strip()
+            while True:
+                try:
+                    line = input()
+                    # 检测结束标记
+                    if line.strip().lower() == 'done':
+                        break
+                    lines.append(line)
+                except EOFError:
+                    break
         except KeyboardInterrupt:
             console.print("\n[yellow]已取消[/yellow]")
             return
         
+        curl_command = "\n".join(lines).strip()
+        
         # 清理多行 cURL 的续行符
         curl_command = curl_command.replace("\\\n", " ").replace("\\\r\n", " ")
-        curl_command = curl_command.replace("\n", " ")  # 将换行转为空格
         
         if not curl_command:
             console.print("[red]输入为空，取消配置[/red]")
