@@ -9,8 +9,10 @@
 - 视频平台
 - 播客平台
 - 在线教育平台
+- 需要登录认证的私有渠道（即刻、小红书、知乎等）
 
 新增：国内外 Top 30 信息渠道采集器
+新增：认证采集器（支持交互式 Cookie 管理）
 """
 from src.collector.base import BaseCollector, CollectorManager, CollectorResult
 
@@ -64,6 +66,18 @@ from src.collector.intl_podcast_collector import (
     OnlineCourseCollector,
     NetflixEducationalCollector,
     MasterClassCollector,
+)
+
+# 带认证的采集器
+from src.collector.base_auth_collector import (
+    AuthenticatedCollector,
+    AuthError,
+    AuthExpiredError,
+    AuthRequiredError,
+    JikeAuthenticatedCollector,
+    XiaohongshuAuthenticatedCollector,
+    ZhihuAuthenticatedCollector,
+    BilibiliAuthenticatedCollector,
 )
 
 __all__ = [
@@ -127,4 +141,14 @@ __all__ = [
     "OnlineCourseCollector",
     "NetflixEducationalCollector",
     "MasterClassCollector",
+    
+    # 带认证的采集器
+    "AuthenticatedCollector",
+    "AuthError",
+    "AuthExpiredError",
+    "AuthRequiredError",
+    "JikeAuthenticatedCollector",
+    "XiaohongshuAuthenticatedCollector",
+    "ZhihuAuthenticatedCollector",
+    "BilibiliAuthenticatedCollector",
 ]

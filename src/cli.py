@@ -7,6 +7,7 @@ from datetime import datetime
 
 import click
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
@@ -158,6 +159,242 @@ def init():
         console.print("[green]数据库初始化完成[/green]")
     
     asyncio.run(_init())
+
+
+# ============ 认证管理命令 ============
+
+@cli.group()
+def auth():
+    """认证管理 - 管理需要登录的信息渠道"""
+    pass
+
+
+@auth.command("list")
+def auth_list():
+    """列出所有已配置的认证"""
+    async def _list():
+        from src.auth_manager import get_auth_manager
+        
+        manager = get_auth_manager()
+        credentials = await manager.list_auth()
+        
+        if not credentials:
+            console.print("[yellow]暂无认证配置[/yellow]")
+            console.print("\n使用 [cyan]python -m src.cli auth add <渠道名>[/cyan] 添加认证")
+            console.print("\n支持的渠道:")
+            for key, config in manager.get_supported_sources().items():
+                console.print(f"  • [green]{key}[/green] - {config.display_name}")
+            return
+        
+        table = Table(title="已配置的认证")
+        table.add_column("渠道", style="cyan")
+        table.add_column("认证方式", style="blue")
+        table.add_column("用户信息", style="green")
+        table.add_column("过期时间", style="yellow")
+        table.add_column("状态", style="bold")
+        
+        for cred in credentials:
+            expires = cred["expires_at"].strftime("%Y-%m-%d %H:%M") if cred["expires_at"] else "未知"
+            
+            # 计算状态
+            if not cred["is_valid"]:
+                status = "[red]✗ 失效[/red]"
+            elif cred["expires_at"] and cred["expires_at"] < datetime.utcnow():
+                status = "[red]✗ 已过期[/red]"
+            elif cred["expires_at"] and (cred["expires_at"] - datetime.utcnow()).days <= 3:
+                status = "[yellow]⚠ 即将过期[/yellow]"
+            else:
+                status = "[green]✓ 有效[/green]"
+            
+            user_info = cred["username"] or "-"
+            
+            table.add_row(
+                f"{cred['display_name']}\n[cyan]({cred['source_name']})[/cyan]",
+                cred["auth_type"],
+                user_info,
+                expires,
+                status
+            )
+        
+        console.print(table)
+    
+    asyncio.run(_list())
+
+
+@auth.command("add")
+@click.argument("source_name")
+@click.option("--username", "-u", help="用户名（可选）")
+def auth_add(source_name: str, username: str = None):
+    """添加认证配置"""
+    async def _add():
+        from src.auth_manager import get_auth_manager, AUTH_CONFIGS
+        
+        manager = get_auth_manager()
+        config = manager.get_config(source_name)
+        
+        if not config:
+            console.print(f"[red]不支持的渠道: {source_name}[/red]")
+            console.print("\n支持的渠道:")
+            for key, cfg in AUTH_CONFIGS.items():
+                console.print(f"  • [green]{key}[/green] - {cfg.display_name}")
+            return
+        
+        # 显示帮助信息
+        console.print(Panel(
+            f"[bold blue]正在为 [{config.display_name}] 配置认证信息[/bold blue]\n\n"
+            f"{config.help_text}\n\n"
+            "[yellow]提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串[/yellow]",
+            title="认证配置向导",
+            border_style="blue"
+        ))
+        
+        # 获取输入
+        console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
+        console.print("(输入完成后按 Enter，支持多行输入，按 Ctrl+D 或输入空行结束)\n")
+        
+        lines = []
+        try:
+            while True:
+                line = input("> ")
+                if not line.strip():
+                    break
+                lines.append(line)
+        except EOFError:
+            pass
+        
+        curl_command = "\n".join(lines).strip()
+        
+        if not curl_command:
+            console.print("[red]输入为空，取消配置[/red]")
+            return
+        
+        # 添加认证
+        with console.status("[bold green]正在保存认证配置..."):
+            success, message = await manager.add_auth(source_name, curl_command, username)
+        
+        if success:
+            console.print(f"\n[green]{message}[/green]")
+            
+            # 自动测试
+            console.print("\n[bold]正在测试认证...[/bold]")
+            is_valid, test_msg, user_info = await manager.test_auth(source_name)
+            
+            if is_valid:
+                console.print(f"[green]✓ 认证测试通过: {test_msg}[/green]")
+                if user_info and user_info.get("username"):
+                    console.print(f"  用户名: [cyan]{user_info['username']}[/cyan]")
+            else:
+                console.print(f"[yellow]⚠ 认证测试失败: {test_msg}[/yellow]")
+                console.print("[yellow]配置已保存，但可能无法正常使用，请检查 Cookie 是否有效[/yellow]")
+        else:
+            console.print(f"\n[red]✗ {message}[/red]")
+    
+    asyncio.run(_add())
+
+
+@auth.command("update")
+@click.argument("source_name")
+@click.option("--username", "-u", help="用户名（可选）")
+def auth_update(source_name: str, username: str = None):
+    """更新认证配置"""
+    # 复用 add 逻辑
+    async def _update():
+        from src.auth_manager import get_auth_manager
+        
+        manager = get_auth_manager()
+        config = manager.get_config(source_name)
+        
+        if not config:
+            console.print(f"[red]不支持的渠道: {source_name}[/red]")
+            return
+        
+        # 检查现有配置
+        from src.database import get_session, AuthCredentialRepository
+        async with get_session() as session:
+            repo = AuthCredentialRepository(session)
+            existing = await repo.get_by_source(source_name)
+        
+        if existing:
+            console.print(f"[blue]当前配置将于 {existing.expires_at.strftime('%Y-%m-%d %H:%M')} 过期[/blue]\n")
+        
+        # 调用 add 逻辑
+        await auth_add.callback(source_name, username)
+    
+    asyncio.run(_update())
+
+
+@auth.command("remove")
+@click.argument("source_name")
+@click.confirmation_option(prompt="确定要删除此认证配置吗?")
+def auth_remove(source_name: str):
+    """删除认证配置"""
+    async def _remove():
+        from src.auth_manager import get_auth_manager
+        
+        manager = get_auth_manager()
+        success, message = await manager.remove_auth(source_name)
+        
+        if success:
+            console.print(f"[green]{message}[/green]")
+        else:
+            console.print(f"[red]{message}[/red]")
+    
+    asyncio.run(_remove())
+
+
+@auth.command("test")
+@click.argument("source_name")
+def auth_test(source_name: str):
+    """测试认证是否有效"""
+    async def _test():
+        from src.auth_manager import get_auth_manager
+        
+        manager = get_auth_manager()
+        config = manager.get_config(source_name)
+        
+        if not config:
+            console.print(f"[red]不支持的渠道: {source_name}[/red]")
+            return
+        
+        console.print(f"[bold]测试 [{config.display_name}] 认证状态...[/bold]\n")
+        
+        with console.status("[bold green]正在测试认证..."):
+            is_valid, message, user_info = await manager.test_auth(source_name)
+        
+        if is_valid:
+            console.print(f"[green]✓ 认证有效[/green]")
+            if user_info:
+                if user_info.get("username"):
+                    console.print(f"  用户名: [cyan]{user_info['username']}[/cyan]")
+                if user_info.get("user_id"):
+                    console.print(f"  用户ID: [dim]{user_info['user_id']}[/dim]")
+        else:
+            console.print(f"[red]✗ {message}[/red]")
+    
+    asyncio.run(_test())
+
+
+@auth.command("guide")
+def auth_guide():
+    """显示认证配置指南"""
+    from src.auth_manager import AUTH_CONFIGS
+    
+    console.print("[bold blue]认证配置指南[/bold blue]\n")
+    console.print("以下渠道需要登录认证才能采集个性化内容:\n")
+    
+    for key, config in AUTH_CONFIGS.items():
+        console.print(Panel(
+            f"[bold]{config.display_name}[/bold] ([cyan]{key}[/cyan])\n"
+            f"[dim]认证方式:[/dim] {config.auth_type}\n"
+            f"[dim]默认有效期:[/dim] {config.expires_days} 天\n\n"
+            f"{config.help_text}",
+            border_style="green"
+        ))
+    
+    console.print("\n[bold]常用命令:[/bold]")
+    console.print("  [cyan]python -m src.cli auth list[/cyan]     - 查看已配置的认证")
+    console.print("  [cyan]python -m src.cli auth add jike[/cyan]  - 添加即刻认证")
+    console.print("  [cyan]python -m src.cli auth test jike[/cyan] - 测试即刻认证")
 
 
 if __name__ == "__main__":
