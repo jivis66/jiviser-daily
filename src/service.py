@@ -89,7 +89,9 @@ class DailyAgentService:
         results = await self.collector_manager.collect_all()
         
         # 保存到数据库
-        async for session in get_session():
+        session_generator = get_session()
+        session = await session_generator.asend(None)
+        try:
             repo = ContentRepository(session)
             total_saved = 0
             
@@ -112,8 +114,14 @@ class DailyAgentService:
                     except Exception as e:
                         print(f"[Service] 保存内容失败: {e}")
             
+            await session.commit()
             print(f"[Service] 采集完成，保存 {total_saved} 条内容")
-            break  # 只执行一次
+        except Exception as e:
+            await session.rollback()
+            print(f"[Service] 保存会话失败: {e}")
+            raise
+        finally:
+            await session.close()
         
         return results
     
