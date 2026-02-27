@@ -1,0 +1,191 @@
+# =====================================
+# 日报分栏配置
+# 可根据需要自定义分栏和数据源
+# =====================================
+
+columns:
+  - id: "headlines"
+    name: "🔥 今日头条"
+    description: "当日最重要的科技新闻"
+    enabled: true
+    max_items: 5
+    order: 1
+    sources:
+      - type: "rss"
+        name: "TechCrunch"
+        url: "https://techcrunch.com/feed/"
+        weight: 1.0
+        filter:
+          keywords: ["AI", "人工智能", "大模型", "LLM", "OpenAI", "startup"]
+          exclude: ["广告", "sponsored"]
+      
+      - type: "rss"
+        name: "36氪"
+        url: "https://36kr.com/feed"
+        weight: 0.9
+        filter:
+          keywords: ["科技", "AI", "融资", "创业"]
+      
+      - type: "api"
+        name: "Hacker News"
+        provider: "hackernews"
+        endpoint: "https://hacker-news.firebaseio.com/v0/topstories.json"
+        weight: 0.8
+        filter:
+          min_score: 100
+    
+    organization:
+      sort_by: "relevance"
+      dedup_strategy: "semantic"
+      summarize: "3_points"
+      highlight_key_info: true
+
+  - id: "tech"
+    name: "💻 技术前沿"
+    description: "技术文章、开源项目、编程语言"
+    enabled: true
+    max_items: 8
+    order: 2
+    sources:
+      - type: "rss"
+        name: "GitHub Blog"
+        url: "https://github.blog/feed/"
+        weight: 1.0
+      
+      - type: "api"
+        name: "GitHub Trending"
+        provider: "github"
+        endpoint: "https://api.github.com/search/repositories"
+        weight: 0.9
+        params:
+          q: "stars:>100 created:>2024-01-01"
+          sort: "stars"
+          order: "desc"
+      
+      - type: "rss"
+        name: "arXiv AI"
+        url: "http://export.arxiv.org/rss/cs.AI"
+        weight: 0.8
+        filter:
+          keywords: ["LLM", "transformer", "GPT", "language model"]
+      
+      - type: "rss"
+        name: "Dev.to"
+        url: "https://dev.to/feed"
+        weight: 0.7
+    
+    organization:
+      sort_by: "time"
+      group_by: "topic"
+      dedup_strategy: "exact"
+      summarize: "paragraph"
+
+  - id: "ai_research"
+    name: "🧠 AI 研究"
+    description: "AI 论文、研究成果"
+    enabled: true
+    max_items: 5
+    order: 3
+    sources:
+      - type: "rss"
+        name: "arXiv CS.CL"
+        url: "http://export.arxiv.org/rss/cs.CL"
+        weight: 1.0
+      
+      - type: "rss"
+        name: "Papers With Code"
+        url: "https://paperswithcode.com/rss"
+        weight: 0.9
+      
+      - type: "api"
+        name: "Hugging Face"
+        provider: "huggingface"
+        endpoint: "https://huggingface.co/api/datasets"
+        weight: 0.7
+    
+    organization:
+      sort_by: "time"
+      dedup_strategy: "semantic"
+      summarize: "3_points"
+
+  - id: "business"
+    name: "📈 商业动态"
+    description: "商业新闻、市场分析、投融资"
+    enabled: true
+    max_items: 5
+    order: 4
+    sources:
+      - type: "rss"
+        name: "福布斯"
+        url: "https://www.forbes.com/business/feed/"
+        weight: 0.9
+        filter:
+          keywords: ["科技", "startup", "VC", "融资"]
+      
+      - type: "rss"
+        name: "Bloomberg"
+        url: "https://feeds.bloomberg.com/business/news.rss"
+        weight: 0.8
+    
+    organization:
+      sort_by: "time"
+      dedup_strategy: "exact"
+      summarize: "1_sentence"
+
+  - id: "deep_dive"
+    name: "📚 深度阅读"
+    description: "深度文章、长文分析"
+    enabled: true
+    max_items: 3
+    order: 5
+    schedule: "weekly"
+    sources:
+      - type: "rss"
+        name: "Wait But Why"
+        url: "https://waitbutwhy.com/feed"
+        weight: 1.0
+      
+      - type: "rss"
+        name: "Stratechery"
+        url: "https://stratechery.com/feed/"
+        weight: 0.9
+    
+    organization:
+      sort_by: "time"
+      dedup_strategy: "exact"
+      summarize: "paragraph"
+
+# ===== 智能组合规则 =====
+composition_rules:
+  # 内容平衡：避免单一来源占比过高
+  source_diversity:
+    max_ratio_per_source: 0.4
+    min_source_count: 2
+  
+  # 时间分布：优先最新内容，但保留重要旧闻
+  time_distribution:
+    recency_weight: 0.7
+    importance_weight: 0.3
+    max_age_hours: 48
+  
+  # 主题覆盖：确保主题多样性
+  topic_coverage:
+    min_topics: 3
+    avoid_topic_overlap: true
+
+# ===== 内容质量过滤 =====
+quality_filter:
+  # 最小内容长度（字符）
+  min_content_length: 200
+  # 最大内容长度（字符）
+  max_content_length: 50000
+  # 最小标题长度
+  min_title_length: 10
+  # 排除的域名
+  blocked_domains:
+    - "example-spam-site.com"
+    - "low-quality-news.com"
+  # 需要的语言（ISO 639-1 代码）
+  preferred_languages:
+    - "zh"
+    - "en"
