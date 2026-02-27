@@ -489,12 +489,17 @@ def _auth_add_manual(source_name: str, username: str = None):
         
         if success:
             click.echo(f"✓ {message}")
-            click.echo("正在测试...")
-            is_valid, test_msg, _ = await manager.test_auth(source_name)
-            if is_valid:
-                click.echo(f"✓ 测试通过")
+            
+            # 对严格反爬平台，跳过 HTTP 测试（避免 406）
+            if source_name in ['xiaohongshu', 'douyin']:
+                click.echo("✓ Cookie 已保存（适合配合浏览器采集器使用）")
             else:
-                click.echo(f"⚠ 测试未通过: {test_msg}")
+                click.echo("正在测试...")
+                is_valid, test_msg, _ = await manager.test_auth(source_name)
+                if is_valid:
+                    click.echo(f"✓ 测试通过")
+                else:
+                    click.echo(f"⚠ 测试未通过: {test_msg}")
         else:
             click.echo(f"✗ {message}")
     
