@@ -94,17 +94,31 @@ class BrowserAuthHelper:
             
             if not browser:
                 return False, f"无法启动浏览器:\n" + "\n".join(launch_errors)
+            
+            # 设置请求拦截，捕获请求头
+            captured_request = {}
+            
+            async def handle_route(route, request):
+                """拦截请求并捕获 headers"""
+                if self.config.test_endpoint in request.url:
+                    captured_request['headers'] = await request.all_headers()
+                    captured_request['url'] = request.url
+                await route.continue_()
+            
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 800}
             )
             page = await context.new_page()
+            
+            # 启用请求拦截
+            await page.route("**/*", handle_route)
             
             print(f"\n{'='*60}")
             print(f"正在为 [{self.config.display_name}] 获取认证信息")
             print(f"{'='*60}\n")
             print(f"1. 浏览器已启动，请登录您的账号")
             print(f"2. 登录成功后，返回终端并按 Enter 确认")
-            print(f"3. 系统将自动提取 Cookie\n")
+            print(f"3. 系统将自动提取 Cookie 和请求信息\n")
             
             # 打开登录页面
             await page.goto(self.config.login_url)
@@ -113,6 +127,14 @@ class BrowserAuthHelper:
             input("登录完成后请按 Enter 键...")
             
             try:
+                # 访问测试接口以捕获请求头
+                print("\n正在捕获请求信息...")
+                try:
+                    await page.goto(self.config.test_endpoint)
+                    await asyncio.sleep(2)
+                except:
+                    pass
+                
                 # 提取 cookie
                 cookies = await context.cookies()
                 cookie_dict = {c['name']: c['value'] for c in cookies}
@@ -124,8 +146,14 @@ class BrowserAuthHelper:
                 # 转换为字符串格式
                 self.cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
                 
-                # 获取当前页面的 User-Agent 和其他 headers
-                self.headers = await self._get_page_headers(page)
+                # 优先使用捕获的请求头，否则使用页面 headers
+                if captured_request.get('headers'):
+                    self.headers = captured_request['headers']
+                    # 移除不需要的头
+                    for key in ['cookie', 'content-length', 'host']:
+                        self.headers.pop(key, None)
+                else:
+                    self.headers = await self._get_page_headers(page)
                 
                 # 尝试获取用户信息
                 user_info = await self._try_get_user_info(page)
@@ -134,6 +162,9 @@ class BrowserAuthHelper:
                 
                 if user_info:
                     print(f"\n检测到用户信息: {user_info}")
+                
+                if captured_request.get('headers'):
+                    print("✓ 已捕获完整请求头")
                 
                 return True, self.cookie_str
                 
@@ -150,20 +181,28 @@ class BrowserAuthHelper:
         except:
             headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         
+        # 通用 headers
+        headers['Accept'] = 'application/json, text/plain, */*'
+        headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8'
+        headers['Accept-Encoding'] = 'gzip, deflate, br'
+        headers['Connection'] = 'keep-alive'
+        headers['Sec-Fetch-Dest'] = 'empty'
+        headers['Sec-Fetch-Mode'] = 'cors'
+        headers['Sec-Fetch-Site'] = 'same-site'
+        
         # 根据平台添加特定 headers
         if self.source_name == 'xiaohongshu':
-            headers['Accept'] = 'application/json, text/plain, */*'
-            headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8'
             headers['Referer'] = 'https://www.xiaohongshu.com/'
             headers['Origin'] = 'https://www.xiaohongshu.com'
+            # 小红书特定的 headers
+            headers['X-Sign'] = ''  # 可能需要动态生成
+            headers['X-Timestamp'] = str(int(asyncio.get_event_loop().time() * 1000))
         elif self.source_name == 'zhihu':
-            headers['Accept'] = 'application/json, text/plain, */*'
-            headers['Accept-Language'] = 'zh-CN,zh;q=0.9'
             headers['Referer'] = 'https://www.zhihu.com/'
+            headers['x-requested-with'] = 'fetch'
         elif self.source_name == 'jike':
-            headers['Accept'] = 'application/json, text/plain, */*'
-            headers['Accept-Language'] = 'zh-CN,zh;q=0.9'
             headers['Referer'] = 'https://web.okjike.com/'
+            headers['Origin'] = 'https://web.okjike.com'
         
         return headers
     
@@ -256,7 +295,12 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
     success, message = await manager.add_auth(source_name, curl_cmd, username)
     
     if success:
-        # 测试认证
+        # 对于小红书等有严格反爬机制的平台，跳过 HTTP 测试
+        # 因为需要动态签名，无法通过简单 cURL 验证
+        if source_name in ['xiaohongshu', 'douyin']:
+            return True, "认证信息已保存（浏览器自动获取的 Cookie 通常可直接使用）"
+        
+        # 其他平台尝试 HTTP 测试
         is_valid, test_msg, user_info = await manager.test_auth(source_name)
         if is_valid:
             return True, f"认证成功并已保存。{test_msg}"
