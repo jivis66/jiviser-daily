@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-console = Console(force_terminal=True)
+console = Console()
 
 
 @click.group()
@@ -418,76 +418,63 @@ def auth_add(source_name: str, username: str = None):
     config = manager.get_config(source_name)
     
     if not config:
-        console.print(f"[red]不支持的渠道: {source_name}[/red]")
-        console.print("\n支持的渠道:")
+        click.echo(f"不支持的渠道: {source_name}")
+        click.echo("\n支持的渠道:")
         for key, cfg in AUTH_CONFIGS.items():
-            console.print(f"  • [green]{key}[/green] - {cfg.display_name}")
+            click.echo(f"  • {key} - {cfg.display_name}")
         return
     
     # 显示帮助信息
-    console.print(Panel(
-        f"[bold blue]正在为 [{config.display_name}] 配置认证信息[/bold blue]\n\n"
-        f"{config.help_text}\n\n"
-        "[yellow]提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串[/yellow]",
-        title="认证配置向导",
-        border_style="blue"
-    ))
+    click.echo(f"\n{'='*60}")
+    click.echo(f"正在为 [{config.display_name}] 配置认证信息")
+    click.echo(f"{'='*60}\n")
+    click.echo(config.help_text)
+    click.echo("\n提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串")
     
-    # 获取输入（同步部分，在 asyncio.run 之前执行）
-    import sys
-    print("\n请粘贴 cURL 命令或 Cookie 字符串:", flush=True)
-    print("(支持单行/多行，输入 'done' 结束，或按 Ctrl+D/Z)", flush=True)
+    # 获取输入
+    click.echo("\n" + "-"*40)
+    click.echo("请输入 cURL 命令或 Cookie 字符串")
+    click.echo("支持两种方式:")
+    click.echo("  1. 单行: 直接粘贴，按 Enter")
+    click.echo("  2. 多行: 粘贴后将所有 \\ 和换行去掉，合并为一行")
+    click.echo("-"*40)
     
-    lines = []
+    # 使用标准 input 更可靠
     try:
-        while True:
-            try:
-                # 使用 sys.stdin.readline 更可靠
-                line = sys.stdin.readline()
-                if not line:  # EOF
-                    break
-                line = line.rstrip('\n\r')
-                # 检测结束标记
-                if line.strip().lower() == 'done':
-                    break
-                lines.append(line)
-            except EOFError:
-                break
-    except KeyboardInterrupt:
-        print("\n已取消")
+        click.echo("")  # 空行提示
+        curl_command = input("粘贴 > ").strip()
+    except (EOFError, KeyboardInterrupt):
+        click.echo("\n已取消")
         return
     
-    curl_command = "\n".join(lines).strip()
-    
-    # 清理多行 cURL 的续行符
-    curl_command = curl_command.replace("\\\n", " ").replace("\\\r\n", " ")
+    # 清理输入
+    curl_command = curl_command.replace("\\", "")
     
     if not curl_command:
-        console.print("[red]输入为空，取消配置[/red]")
+        click.echo("输入为空，取消配置")
         return
     
     # 异步部分：保存和测试
     async def _save_and_test():
-        # 添加认证
-        with console.status("[bold green]正在保存认证配置..."):
-            success, message = await manager.add_auth(source_name, curl_command, username)
+        click.echo("正在保存认证配置...")
+        success, message = await manager.add_auth(source_name, curl_command, username)
         
         if success:
-            console.print(f"\n[green]{message}[/green]")
+            click.echo(f"\n✓ {message}")
             
             # 自动测试
-            console.print("\n[bold]正在测试认证...[/bold]")
+            click.echo("\n正在测试认证...")
             is_valid, test_msg, user_info = await manager.test_auth(source_name)
             
             if is_valid:
-                console.print(f"[green]✓ 认证测试通过: {test_msg}[/green]")
+                click.echo(f"✓ 认证测试通过: {test_msg}")
                 if user_info and user_info.get("username"):
-                    console.print(f"  用户名: [cyan]{user_info['username']}[/cyan]")
+                    click.echo(f"  用户名: {user_info['username']}")
             else:
-                console.print(f"[yellow]⚠ 认证测试失败: {test_msg}[/yellow]")
-                console.print("[yellow]配置已保存，但可能无法正常使用，请检查 Cookie 是否有效[/yellow]")
+                click.echo(f"⚠ 认证测试失败: {test_msg}")
+                click.echo("配置已保存，但可能无法正常使用，请检查 Cookie 是否有效")
         else:
-            console.print(f"\n[red]✗ {message}[/red]")
+            click.echo(f"\n✗ {message}")
     
     asyncio.run(_save_and_test())
 
