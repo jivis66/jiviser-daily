@@ -155,14 +155,12 @@ def verify():
 @click.option("--template", "-t", help="使用预设模板")
 def start(mode: str, template: str):
     """启动 Daily Agent 服务"""
-    async def _start():
+    async def _init_and_setup():
+        """初始化数据库和配置（异步部分）"""
         from src.database import init_db
         
         # 检查是否首次启动
         is_first_run = not os.path.exists("data/daily.db")
-        
-        # 使用 nonlocal 访问外部的 mode 参数
-        nonlocal mode
         
         if is_first_run and not mode:
             # 首次启动，交互式选择模式
@@ -189,9 +187,14 @@ def start(mode: str, template: str):
 
 请选择 [1-2]: """)
             choice = input().strip()
-            mode = "fast" if choice == "1" else "configure"
+            return "fast" if choice == "1" else "configure"
+        return mode
+    
+    async def _run_setup(selected_mode: str):
+        """运行设置（异步部分）"""
+        from src.database import init_db
         
-        if mode == "fast" or (not mode and template):
+        if selected_mode == "fast" or (not selected_mode and template):
             # Fast 模式启动
             console.print("""
 🚀 Daily Agent - Fast 模式
@@ -229,26 +232,31 @@ def start(mode: str, template: str):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             """)
         
-        elif mode == "configure":
+        elif selected_mode == "configure":
             # Configure 模式 - 运行完整向导
             from src.setup_wizard import SetupWizard
             wizard = SetupWizard()
             await wizard.run_full_setup()
-        
-        # 启动服务
-        import uvicorn
-        from src.config import get_settings
-        settings = get_settings()
-        
-        console.print(f"\n[green]正在启动服务...[/green]\n")
-        uvicorn.run(
-            "src.main:app",
-            host=settings.host,
-            port=settings.port,
-            reload=settings.debug
-        )
     
-    asyncio.run(_start())
+    # 第一步：交互式选择模式（如果需要）
+    selected_mode = asyncio.run(_init_and_setup())
+    
+    # 第二步：运行设置
+    if selected_mode:
+        asyncio.run(_run_setup(selected_mode))
+    
+    # 第三步：启动服务（同步方式，避免 asyncio.run 嵌套）
+    import uvicorn
+    from src.config import get_settings
+    settings = get_settings()
+    
+    console.print(f"\n[green]正在启动服务...[/green]\n")
+    uvicorn.run(
+        "src.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug
+    )
 
 
 @cli.command()

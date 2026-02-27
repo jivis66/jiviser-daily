@@ -214,6 +214,9 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """获取数据库会话（依赖注入使用）"""
     global _async_session_maker
