@@ -1802,7 +1802,336 @@ $ python -m src.cli setup import my-config.yaml
 ✅ 配置导入成功
 ```
 
-### 9.7 冷启动推荐策略
+### 9.5 交互式 LLM 配置
+
+提供友好的交互式向导，帮助用户配置大语言模型（LLM），支持多种提供商和模型选择。
+
+#### 9.5.1 LLM 配置命令
+
+```bash
+# 启动 LLM 配置向导
+$ python -m src.cli llm setup
+
+# 查看当前 LLM 配置
+$ python -m src.cli llm status
+
+# 测试 LLM 连接
+$ python -m src.cli llm test
+
+# 切换模型
+$ python -m src.cli llm switch
+
+# 查看支持的模型列表
+$ python -m src.cli llm models
+```
+
+#### 9.5.2 交互式配置流程
+
+```bash
+$ python -m src.cli llm setup
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🤖 LLM 配置向导
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+本向导将帮助您配置大语言模型，用于：
+  • 智能内容摘要生成
+  • 内容质量评估
+  • 个性化推荐优化
+
+按 Enter 开始配置...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+步骤 1/3: 选择 LLM 提供商
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 选择 LLM 提供商：
+
+   [1] 🌐 OpenAI (推荐)
+       模型: GPT-4o, GPT-4o-mini, GPT-4
+       特点: 稳定、高质量、速度快
+   
+   [2] 🔗 OpenRouter
+       模型: Claude, GPT-4, 国产模型
+       特点: 聚合多厂商、性价比高
+   
+   [3] 🏠 Ollama (本地部署)
+       模型: Llama, Mistral, Qwen 等
+       特点: 免费、隐私安全、无需网络
+   
+   [4] ☁️ Azure OpenAI
+       模型: GPT-4, GPT-3.5
+       特点: 企业级、SLA保障
+   
+   [5] 🇨🇳 国内大模型
+       模型: 文心一言、通义千问、智谱AI
+       特点: 中文优化、国内访问快
+   
+   [6] ⏭️  跳过 - 暂不配置 LLM
+       将使用规则摘要（功能受限）
+
+请选择 [1-6]: 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+步骤 2/3: 配置 API 密钥
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 您选择了 [OpenAI]
+
+📖 获取 API Key 步骤：
+   1. 访问 https://platform.openai.com/api-keys
+   2. 登录您的 OpenAI 账号
+   3. 点击 "Create new secret key"
+   4. 复制生成的密钥
+
+⚠️  提示：密钥仅保存在本地 .env 文件，不会上传
+
+请输入 OpenAI API Key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+✅ API Key 格式验证通过
+
+📝 选择默认模型：
+
+   [1] gpt-4o-mini (推荐)
+       性价比高，适合日常使用
+       价格: $0.15 / 1M tokens
+   
+   [2] gpt-4o
+       最强性能，适合重要内容
+       价格: $5.00 / 1M tokens
+   
+   [3] gpt-4-turbo
+       平衡性能与价格
+       价格: $10.00 / 1M tokens
+
+请选择 [1-3]: 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+步骤 3/3: 功能配置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 启用 LLM 增强功能：
+
+   [x] 智能摘要生成
+       使用 LLM 生成高质量内容摘要
+   
+   [x] 内容质量评估
+       自动评估文章原创性、深度
+   
+   [ ] 智能标签提取
+       自动提取精准内容标签
+   
+   [ ] 个性化推荐优化
+       基于 LLM 的个性化排序
+
+是否启用上述功能？ [Y/n]: Y
+
+📝 摘要长度偏好：
+   [1] 简洁 - 一句话摘要
+   [2] 标准 - 3-5个要点
+   [3] 详细 - 完整段落摘要
+
+请选择 [1-3]: 2
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+配置预览
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  提供商: OpenAI
+  模型: gpt-4o-mini
+  API Key: sk-****-xxxx (已脱敏)
+  功能: 智能摘要、质量评估
+  摘要长度: 标准 (3-5要点)
+
+是否保存配置? [Y/n]: Y
+
+🧪 正在测试 API 连接...
+✅ 连接成功！模型 gpt-4o-mini 可用
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ LLM 配置完成！
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+配置已保存到 .env 文件
+
+💡 提示：
+  • 运行 'python -m src.cli llm status' 查看配置状态
+  • 运行 'python -m src.cli llm test' 测试连接
+  • 如需更改配置，重新运行 'python -m src.cli llm setup'
+```
+
+#### 9.5.3 LLM 提供商配置详情
+
+**OpenAI 配置：**
+```yaml
+provider: openai
+api_key: sk-xxxxxxxx
+base_url: https://api.openai.com/v1  # 可选，用于代理
+model: gpt-4o-mini
+models_available:
+  - gpt-4o-mini    # 推荐日常使用
+  - gpt-4o         # 高性能需求
+  - gpt-4-turbo    # 复杂任务
+  - gpt-3.5-turbo  # 成本敏感
+```
+
+**OpenRouter 配置：**
+```yaml
+provider: openrouter
+api_key: sk-or-xxxxxxxx
+base_url: https://openrouter.ai/api/v1
+model: anthropic/claude-3.5-sonnet
+models_available:
+  - anthropic/claude-3.5-sonnet  # 推荐
+  - openai/gpt-4o
+  - google/gemini-pro
+  - moonshot/kimi-k2  # 国产
+```
+
+**Ollama 本地配置：**
+```yaml
+provider: ollama
+base_url: http://localhost:11434
+model: qwen2.5:14b
+models_available:
+  - qwen2.5:14b      # 中文推荐
+  - llama3.2:8b      # 英文推荐
+  - mistral:7b       # 平衡选择
+install_guide: |
+  1. 安装 Ollama: curl -fsSL https://ollama.com/install.sh | sh
+  2. 拉取模型: ollama pull qwen2.5:14b
+  3. 验证: ollama run qwen2.5:14b
+```
+
+**Azure OpenAI 配置：**
+```yaml
+provider: azure
+api_key: xxxxxxxxxxxxxxxx
+base_url: https://your-resource.openai.azure.com
+api_version: 2024-02-15-preview
+deployment: gpt-4o
+```
+
+**国内大模型配置：**
+```yaml
+# 文心一言 (百度)
+provider: baidu
+api_key: xxxxxxxx
+secret_key: xxxxxxxx
+model: ernie-bot-4
+
+# 通义千问 (阿里)
+provider: aliyun
+api_key: sk-xxxxxxxx
+model: qwen-max
+
+# 智谱 AI
+provider: zhipu
+api_key: xxxxxxxx
+model: glm-4
+```
+
+#### 9.5.4 多模型配置策略
+
+支持配置多个 LLM，按需切换：
+
+```yaml
+llm_configs:
+  # 默认配置
+  default:
+    provider: openai
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-4o-mini
+  
+  # 高质量摘要专用
+  premium:
+    provider: openai
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-4o
+  
+  # 备用配置
+  fallback:
+    provider: openrouter
+    api_key: ${OPENROUTER_API_KEY}
+    model: anthropic/claude-3.5-sonnet
+  
+  # 本地隐私模式
+  local:
+    provider: ollama
+    base_url: http://localhost:11434
+    model: qwen2.5:14b
+
+# 使用策略
+usage_strategy:
+  summary: default      # 日常摘要使用默认
+  quality_check: premium  # 质量评估使用高质量
+  fallback_order: [default, fallback, local]  # 失败时 fallback
+```
+
+#### 9.5.5 智能模型选择建议
+
+系统根据场景自动推荐模型：
+
+| 场景 | 推荐模型 | 理由 |
+|------|----------|------|
+| 日常摘要 | gpt-4o-mini | 性价比高，速度快 |
+| 深度分析 | gpt-4o / Claude 3.5 | 推理能力强 |
+| 中文内容 | Qwen / 文心一言 | 中文理解更好 |
+| 隐私敏感 | Ollama 本地模型 | 数据不出本地 |
+| 离线环境 | Ollama 本地模型 | 无需网络连接 |
+| 预算敏感 | gpt-4o-mini / 本地模型 | 成本低 |
+
+#### 9.5.6 LLM 状态查看命令
+
+```bash
+$ python -m src.cli llm status
+
+🤖 LLM 配置状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+当前配置:
+  提供商:   OpenAI
+  模型:     gpt-4o-mini
+  状态:     ✅ 正常
+  上次测试: 2024-01-15 09:30:00
+
+功能状态:
+  智能摘要:   ✅ 已启用
+  质量评估:   ✅ 已启用
+  智能标签:   ⚪ 未启用
+  推荐优化:   ⚪ 未启用
+
+使用量统计（本月）:
+  API 调用:   1,234 次
+  Token 消耗: 456K
+  预估费用:   $0.07
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+#### 9.5.7 模型切换命令
+
+```bash
+$ python -m src.cli llm switch
+
+📝 选择要使用的模型：
+
+当前: gpt-4o-mini
+
+   [1] gpt-4o-mini (当前)
+   [2] gpt-4o
+   [3] gpt-4-turbo
+   [4] 配置新模型...
+
+请选择 [1-4]: 2
+
+✅ 已切换到 gpt-4o
+
+🧪 测试新模型...
+✅ 模型可用
+```
+
+### 9.6 冷启动推荐策略
 
 对于新用户，系统提供多种冷启动方式：
 

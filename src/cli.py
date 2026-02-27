@@ -484,6 +484,82 @@ def setup_templates():
     console.print("  [cyan]python -m src.cli setup wizard[/cyan]  - 启动向导并选择模板")
 
 
+# ============ LLM 配置命令 ============
+
+@cli.group()
+def llm():
+    """LLM 配置管理 - 配置大语言模型"""
+    pass
+
+
+@llm.command("setup")
+def llm_setup():
+    """启动 LLM 配置向导"""
+    async def _setup():
+        from src.llm_config import LLMSetupWizard
+        
+        wizard = LLMSetupWizard()
+        await wizard.run_setup()
+    
+    asyncio.run(_setup())
+
+
+@llm.command("status")
+def llm_status():
+    """查看 LLM 配置状态"""
+    from src.llm_config import LLMSetupWizard
+    
+    wizard = LLMSetupWizard()
+    wizard.print_status()
+
+
+@llm.command("test")
+def llm_test():
+    """测试 LLM 连接"""
+    async def _test():
+        from src.llm_config import get_llm_manager
+        
+        manager = get_llm_manager()
+        config = manager.get_current_config()
+        
+        if not config.is_configured():
+            console.print("[yellow]⚠️ 尚未配置 LLM，请先运行: python -m src.cli llm setup[/yellow]")
+            return
+        
+        console.print("[bold]🧪 正在测试 LLM 连接...[/bold]\n")
+        
+        with console.status("[bold green]测试中..."):
+            success, message = await manager.test_connection()
+        
+        if success:
+            console.print(f"[green]✅ {message}[/green]")
+        else:
+            console.print(f"[red]✗ {message}[/red]")
+    
+    asyncio.run(_test())
+
+
+@llm.command("switch")
+def llm_switch():
+    """切换 LLM 模型"""
+    async def _switch():
+        from src.llm_config import LLMSetupWizard
+        
+        wizard = LLMSetupWizard()
+        await wizard.switch_model()
+    
+    asyncio.run(_switch())
+
+
+@llm.command("models")
+def llm_models():
+    """查看支持的模型列表"""
+    from src.llm_config import LLMSetupWizard
+    
+    wizard = LLMSetupWizard()
+    wizard.print_models()
+
+
 # 简化命令别名
 @cli.command()
 @click.option("--user", "-u", default="default", help="用户 ID")

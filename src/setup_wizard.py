@@ -260,19 +260,25 @@ class SetupWizard:
         
         # 步骤 1: 用户画像
         console.print("\n[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]")
-        console.print("[bold blue]👤 步骤 1/3: 用户画像设置[/bold blue]")
+        console.print("[bold blue]👤 步骤 1/4: 用户画像设置[/bold blue]")
         console.print("[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]\n")
         self.profile_config = await self._setup_profile()
         
         # 步骤 2: 兴趣偏好
         console.print("\n[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]")
-        console.print("[bold blue]🎯 步骤 2/3: 兴趣偏好配置[/bold blue]")
+        console.print("[bold blue]🎯 步骤 2/4: 兴趣偏好配置[/bold blue]")
         console.print("[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]\n")
         self.interest_config = await self._setup_interests()
         
-        # 步骤 3: 日报内容
+        # 步骤 3: LLM 配置
         console.print("\n[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]")
-        console.print("[bold blue]📰 步骤 3/3: 日报内容定制[/bold blue]")
+        console.print("[bold blue]🤖 步骤 3/4: LLM 配置（可选）[/bold blue]")
+        console.print("[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]\n")
+        await self._setup_llm()
+        
+        # 步骤 4: 日报内容
+        console.print("\n[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]")
+        console.print("[bold blue]📰 步骤 4/4: 日报内容定制[/bold blue]")
         console.print("[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]\n")
         self.daily_config = await self._setup_daily_report()
         
@@ -293,7 +299,8 @@ class SetupWizard:
             "[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]\n"
             "  1. 👤 用户画像设置 (约 1 分钟)\n"
             "  2. 🎯 兴趣偏好配置 (约 2 分钟)\n"
-            "  3. 📰 日报内容定制 (约 1 分钟)\n\n",
+            "  3. 🤖 LLM 配置 (约 1 分钟)\n"
+            "  4. 📰 日报内容定制 (约 1 分钟)\n\n",
             title="启动设置向导",
             border_style="green"
         ))
@@ -484,6 +491,35 @@ class SetupWizard:
             "novelty_preference": interest_template.novelty_preference
         }
     
+    async def _setup_llm(self):
+        """设置 LLM 配置"""
+        from src.llm_config import LLMSetupWizard as LLMWizard
+        
+        console.print("配置 LLM 可以让日报生成更智能的摘要和质量评估。\n")
+        
+        # 检查是否已有配置
+        from src.llm_config import get_llm_manager
+        manager = get_llm_manager()
+        current_config = manager.get_current_config()
+        
+        if current_config.is_configured() and current_config.provider != "skip":
+            console.print(f"[green]✓ 已配置 LLM: {current_config.provider} / {current_config.model}[/green]\n")
+            reconfigure = Confirm.ask("是否重新配置 LLM？", default=False)
+            if not reconfigure:
+                console.print("[dim]保留现有配置，跳过此步骤[/dim]\n")
+                return
+        
+        # 询问是否配置
+        setup_llm = Confirm.ask("是否现在配置 LLM？", default=True)
+        
+        if setup_llm:
+            wizard = LLMWizard()
+            await wizard.run_setup()
+        else:
+            console.print("\n[yellow]⚠️ 已跳过 LLM 配置[/yellow]")
+            console.print("[dim]系统将使用规则摘要（功能受限）[/dim]")
+            console.print("[dim]稍后可通过 python -m src.cli llm setup 重新配置[/dim]\n")
+    
     async def _setup_daily_report(self) -> dict:
         """设置日报内容"""
         # 使用相同的模板
@@ -649,7 +685,10 @@ class SetupWizard:
             "  • 运行 [cyan]python -m src.cli collect[/cyan] 手动触发采集\n"
             "  • 运行 [cyan]python -m src.cli generate[/cyan] 生成日报\n"
             "  • 访问 [cyan]http://localhost:8080/docs[/cyan] 查看 API 文档\n\n"
-            "[dim]如需重新配置，运行: python -m src.cli setup --all[/dim]",
+            "[dim]其他命令：[/dim]\n"
+            "  • [cyan]python -m src.cli llm setup[/cyan] - 配置 LLM\n"
+            "  • [cyan]python -m src.cli auth list[/cyan] - 管理认证渠道\n\n"
+            "[dim]如需重新配置，运行: python -m src.cli quickstart[/dim]",
             title="设置向导",
             border_style="green"
         ))
