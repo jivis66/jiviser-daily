@@ -48,7 +48,18 @@ class BrowserAuthHelper:
         
         async with async_playwright() as p:
             # 启动浏览器
-            browser = await p.chromium.launch(headless=False)
+            try:
+                browser = await p.chromium.launch(headless=False)
+            except Exception as e:
+                error_msg = str(e)
+                if "Executable doesn't exist" in error_msg:
+                    return False, (
+                        "Playwright 浏览器未安装\n\n"
+                        "请运行以下命令安装:\n"
+                        "  python -m playwright install chromium\n\n"
+                        "安装后即可使用浏览器自动获取功能。"
+                    )
+                raise
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 800}
             )
