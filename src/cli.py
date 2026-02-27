@@ -434,14 +434,19 @@ def auth_add(source_name: str, username: str = None):
     ))
     
     # 获取输入（同步部分，在 asyncio.run 之前执行）
-    console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
-    console.print("[dim](支持单行/多行，输入 'done' 或按 Ctrl+D/Z 结束)\n[/dim]")
+    import sys
+    print("\n请粘贴 cURL 命令或 Cookie 字符串:", flush=True)
+    print("(支持单行/多行，输入 'done' 结束，或按 Ctrl+D/Z)", flush=True)
     
     lines = []
     try:
         while True:
             try:
-                line = input()
+                # 使用 sys.stdin.readline 更可靠
+                line = sys.stdin.readline()
+                if not line:  # EOF
+                    break
+                line = line.rstrip('\n\r')
                 # 检测结束标记
                 if line.strip().lower() == 'done':
                     break
@@ -449,7 +454,7 @@ def auth_add(source_name: str, username: str = None):
             except EOFError:
                 break
     except KeyboardInterrupt:
-        console.print("\n[yellow]已取消[/yellow]")
+        print("\n已取消")
         return
     
     curl_command = "\n".join(lines).strip()
