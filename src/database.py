@@ -196,9 +196,20 @@ def get_database_url() -> str:
 
 def init_engine():
     """初始化数据库引擎"""
+    import os
     global _engine
     if _engine is None:
         url = get_database_url()
+        # 确保数据库目录存在
+        if url.startswith("sqlite+aiosqlite:///"):
+            db_path = url.replace("sqlite+aiosqlite:///", "")
+            # 处理相对路径和绝对路径
+            if db_path.startswith("/"):
+                db_dir = os.path.dirname(db_path)
+            else:
+                db_dir = os.path.dirname(db_path) or "."
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
         _engine = create_async_engine(
             url,
             echo=settings.debug,
