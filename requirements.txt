@@ -5,7 +5,7 @@ uvicorn[standard]==0.24.0
 # Data & Validation
 pydantic==2.10.6
 pydantic-settings==2.7.1
-sqlalchemy==2.0.23
+sqlalchemy==2.0.38
 
 # Database (仅 SQLite)
 aiosqlite==0.19.0
