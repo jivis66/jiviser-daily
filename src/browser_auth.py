@@ -47,19 +47,52 @@ class BrowserAuthHelper:
             return False, str(e)
         
         async with async_playwright() as p:
-            # 启动浏览器
-            try:
-                browser = await p.chromium.launch(headless=False)
-            except Exception as e:
-                error_msg = str(e)
-                if "Executable doesn't exist" in error_msg:
-                    return False, (
-                        "Playwright 浏览器未安装\n\n"
-                        "请运行以下命令安装:\n"
-                        "  python -m playwright install chromium\n\n"
-                        "安装后即可使用浏览器自动获取功能。"
-                    )
-                raise
+            # 启动浏览器 - 优先使用系统 Chrome
+            browser = None
+            launch_errors = []
+            
+            # 尝试 1: 使用系统 Chrome (Mac)
+            import os
+            chrome_paths = [
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "/Applications/Chrome.app/Contents/MacOS/Chrome",
+                "/usr/bin/google-chrome",
+                "/usr/bin/chromium",
+                "/usr/bin/chromium-browser",
+                "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+            ]
+            
+            for chrome_path in chrome_paths:
+                if os.path.exists(chrome_path):
+                    try:
+                        browser = await p.chromium.launch(
+                            headless=False,
+                            executable_path=chrome_path
+                        )
+                        break
+                    except Exception as e:
+                        launch_errors.append(f"{chrome_path}: {e}")
+            
+            # 尝试 2: 使用 Playwright 自带的 Chromium
+            if not browser:
+                try:
+                    browser = await p.chromium.launch(headless=False)
+                except Exception as e:
+                    error_msg = str(e)
+                    if "Executable doesn't exist" in error_msg:
+                        return False, (
+                            "未找到 Chrome 浏览器\n\n"
+                            "方案 1 - 安装 Google Chrome:\n"
+                            "  下载: https://www.google.com/chrome/\n\n"
+                            "方案 2 - 使用 Playwright 自带浏览器:\n"
+                            "  python -m playwright install chromium\n\n"
+                            "安装后即可使用浏览器自动获取功能。"
+                        )
+                    launch_errors.append(f"Playwright Chromium: {e}")
+            
+            if not browser:
+                return False, f"无法启动浏览器:\n" + "\n".join(launch_errors)
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 800}
             )
