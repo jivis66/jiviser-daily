@@ -3,7 +3,7 @@
 使用 Playwright 自动获取 Cookie
 """
 import asyncio
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 # Playwright 延迟导入，避免未安装时报错
@@ -29,6 +29,7 @@ class BrowserAuthHelper:
         self.source_name = source_name
         self.config = AUTH_CONFIGS.get(source_name)
         self.cookie_str: Optional[str] = None
+        self.headers: Dict[str, str] = {}
         
     async def get_cookie_interactive(self) -> Tuple[bool, str]:
         """
@@ -123,6 +124,9 @@ class BrowserAuthHelper:
                 # 转换为字符串格式
                 self.cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
                 
+                # 获取当前页面的 User-Agent 和其他 headers
+                self.headers = await self._get_page_headers(page)
+                
                 # 尝试获取用户信息
                 user_info = await self._try_get_user_info(page)
                 
@@ -136,6 +140,32 @@ class BrowserAuthHelper:
             except Exception as e:
                 await browser.close()
                 return False, f"获取 Cookie 失败: {e}"
+    
+    async def _get_page_headers(self, page) -> Dict[str, str]:
+        """获取页面请求头信息"""
+        headers = {}
+        try:
+            # 获取 User-Agent
+            headers['User-Agent'] = await page.evaluate('() => navigator.userAgent')
+        except:
+            headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        
+        # 根据平台添加特定 headers
+        if self.source_name == 'xiaohongshu':
+            headers['Accept'] = 'application/json, text/plain, */*'
+            headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8'
+            headers['Referer'] = 'https://www.xiaohongshu.com/'
+            headers['Origin'] = 'https://www.xiaohongshu.com'
+        elif self.source_name == 'zhihu':
+            headers['Accept'] = 'application/json, text/plain, */*'
+            headers['Accept-Language'] = 'zh-CN,zh;q=0.9'
+            headers['Referer'] = 'https://www.zhihu.com/'
+        elif self.source_name == 'jike':
+            headers['Accept'] = 'application/json, text/plain, */*'
+            headers['Accept-Language'] = 'zh-CN,zh;q=0.9'
+            headers['Referer'] = 'https://web.okjike.com/'
+        
+        return headers
     
     async def _try_get_user_info(self, page) -> Optional[str]:
         """尝试获取用户昵称"""
@@ -177,13 +207,23 @@ class BrowserAuthHelper:
         return None
     
     def get_curl_command(self) -> str:
-        """生成 cURL 命令"""
+        """生成完整的 cURL 命令"""
         if not self.cookie_str:
             return ""
         
-        # 构建简单的 cURL 命令
         url = self.config.test_endpoint if self.config else "https://example.com"
-        return f"curl '{url}' -H 'Cookie: {self.cookie_str}' -H 'User-Agent: Mozilla/5.0'"
+        
+        # 构建完整的 cURL 命令
+        cmd_parts = [f"curl '{url}'"]
+        
+        # 添加 headers
+        for key, value in self.headers.items():
+            cmd_parts.append(f"-H '{key}: {value}'")
+        
+        # 添加 Cookie
+        cmd_parts.append(f"-H 'Cookie: {self.cookie_str}'")
+        
+        return " ".join(cmd_parts)
 
 
 async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool, str]:
