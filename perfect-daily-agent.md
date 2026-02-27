@@ -1343,118 +1343,324 @@ data/
 
 ## 9. 启动设置与交互式配置
 
-提供统一的启动时配置系统，服务首次启动时自动检测配置状态并引导用户完成初始化。所有交互式设置整合进启动流程，确保用户在开始使用前获得最佳个性化体验。
+提供双模式启动系统：**Fast 模式**（开箱即用）和 **Configure 模式**（全面配置）。首次启动时自动检测配置状态，引导用户选择适合的模式，确保在最小摩擦与最大能力之间灵活选择。
 
-### 9.1 启动时配置系统
+### 9.1 双模式启动架构
 
-**核心设计原则：**
+**模式对比：**
 
-- **自动检测**: 服务启动时自动检查必要配置是否完整
-- **渐进式引导**: 按需引导用户完成配置，避免一次性信息过载
-- **配置热加载**: 配置变更无需重启服务
-- **状态持久化**: 所有配置保存至数据库，支持备份与迁移
+| 维度 | Fast 模式 | Configure 模式 |
+|------|-----------|----------------|
+| **启动时间** | 30 秒内 | 3-5 分钟 |
+| **配置交互** | 零配置 | 完整向导 |
+| **用户画像** | 使用通用默认 | 个性化定制 |
+| **兴趣偏好** | 预设平衡模板 | 精准设置 |
+| **日报分栏** | 标准 4 栏 | 自定义分栏 |
+| **LLM 摘要** | ❌ 规则摘要 | ✅ 智能摘要 |
+| **智能排序** | ❌ 时间排序 | ✅ 个性化排序 |
+| **推送渠道** | ❌ 需后续配置 | ✅ 启动时配置 |
+| **冷启动学习** | ❌ 无 | ✅ 7天强化学习 |
+| **适用场景** | 快速体验、临时使用 | 日常使用、深度定制 |
 
-**启动配置检测流程：**
+**启动模式选择流程：**
 
 ```python
-class StartupConfigurator:
-    """启动时配置管理器"""
+class StartupManager:
+    """启动管理器 - 双模式启动架构"""
     
-    async def check_and_configure(self) -> ConfigStatus:
+    async def start(self, mode: Optional[str] = None) -> StartupResult:
         """
-        启动时配置检查与引导
+        启动入口
+        
+        Args:
+            mode: 强制指定模式 ('fast' | 'configure' | None)
+                  None 表示首次启动，交互式选择
         
         Returns:
-            ConfigStatus: 配置状态，决定是否需要进入交互式配置
+            StartupResult: 启动结果
         """
-        status = ConfigStatus()
+        # 1. 基础环境检查
+        await self.check_environment()
         
-        # 1. 检查数据库初始化
-        if not await self.db.is_initialized():
-            await self.init_database()
-            status.needs_db_setup = True
+        # 2. 检查是否首次启动
+        is_first_run = await self.is_first_run()
         
-        # 2. 检查用户画像
-        profile = await self.get_user_profile("default")
-        if not profile or not profile.is_complete():
-            status.needs_profile = True
+        if not is_first_run:
+            # 非首次启动，直接进入
+            return await self.normal_startup()
         
-        # 3. 检查兴趣偏好
-        interests = await self.get_user_interests("default")
-        if not interests or interests.is_empty():
-            status.needs_interests = True
+        # 3. 首次启动 - 模式选择
+        if mode == "fast":
+            return await self.fast_startup()
+        elif mode == "configure":
+            return await self.configure_startup()
+        else:
+            # 交互式选择
+            selected_mode = await self.prompt_mode_selection()
+            if selected_mode == "fast":
+                return await self.fast_startup()
+            else:
+                return await self.configure_startup()
+    
+    async def fast_startup(self) -> StartupResult:
+        """
+        Fast 模式启动
         
-        # 4. 检查日报配置
-        daily_config = await self.get_daily_config("default")
-        if not daily_config:
-            status.needs_daily_config = True
-        
-        # 5. 检查 LLM 配置
-        llm_config = await self.get_llm_config()
-        if not llm_config or not llm_config.is_valid():
-            status.needs_llm_config = True
-            # LLM 可选，标记为建议而非必需
-            status.llm_optional = True
-        
-        # 6. 检查推送渠道
-        channels = await self.get_push_channels("default")
-        if not channels:
-            status.needs_channels = True
-            # 推送渠道可选
-            status.channels_optional = True
-        
-        return status
-```
-
-**启动时交互式配置触发：**
-
-```bash
-# 方式一：服务启动时自动检测
-$ uvicorn src.main:app --reload
-
-🚀 Daily Agent 正在启动...
-📊 配置状态检查
+        特点：
+        - 使用默认配置，零交互
+        - 自动生成通用用户画像
+        - 应用平衡型兴趣模板
+        - 使用规则摘要（无需 LLM）
+        - 30 秒内完成启动
+        """
+        console.print("""
+🚀 Fast 模式启动中...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  数据库连接      ✅ 正常
-  用户画像        ⚠️  未配置
-  兴趣偏好        ⚠️  未配置
-  日报设置        ⚠️  未配置
-  LLM 配置        ⚪ 可选
-  推送渠道        ⚪ 可选
+⚡ 正在应用默认配置...
+  ✓ 初始化数据库
+  ✓ 创建通用用户画像
+  ✓ 加载平衡型兴趣模板
+  ✓ 配置标准日报分栏
+  ✓ 启用规则摘要模式
 
+✅ 启动完成！系统已就绪。
+
+💡 提示：
+  • 当前使用默认配置，部分高级功能未启用
+  • 如需完整功能，运行：python -m src.cli setup --mode configure
+  • 生成第一份日报：python -m src.cli generate
+        """)
+        
+        # 应用 Fast 模式配置
+        config = FastModeConfig().to_user_config()
+        await self.save_config(config)
+        
+        return StartupResult(
+            mode="fast",
+            config_applied=True,
+            ready=True
+        )
+    
+    async def configure_startup(self) -> StartupResult:
+        """
+        Configure 模式启动
+        
+        特点：
+        - 完整交互式配置向导
+        - 个性化用户画像
+        - 精准兴趣偏好
+        - LLM 智能摘要
+        - 推送渠道配置
+        - 3-5 分钟完成
+        """
+        console.print("""
+🔧 Configure 模式启动
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-检测到首次启动，需要完成初始配置。
-是否立即进入交互式配置向导？ [Y/n]: Y
 
-# 进入统一配置向导...
+即将进入完整配置向导，整个过程大约需要 3-5 分钟。
+配置完成后，您将获得：
+  ✅ 个性化内容推荐
+  ✅ LLM 智能摘要
+  ✅ 自动推送服务
+  ✅ 持续学习优化
+
+按 Enter 开始配置...
+        """)
+        
+        # 启动完整配置向导
+        config = await ConfigurationWizard().run()
+        await self.save_config(config)
+        
+        return StartupResult(
+            mode="configure",
+            config_applied=True,
+            ready=True
+        )
 ```
 
-**Docker 启动配置：**
+**启动模式选择界面：**
 
 ```bash
-# Docker 启动时自动检测，可通过环境变量跳过交互式配置
-$ docker-compose up -d
+$ uvicorn src.main:app
 
-# 如需预配置（非交互式）
-$ docker-compose run --rm daily-agent python -m src.cli setup --non-interactive --template tech_developer
+🚀 Daily Agent 首次启动
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+欢迎使用 Daily Agent 个性化日报系统！
+
+请选择启动模式：
+
+  [1] ⚡ Fast 模式 - 开箱即用（推荐首次体验）
+      • 30 秒完成启动
+      • 使用默认配置，无需设置
+      • 基础功能立即可用
+      • ⚠️ 智能摘要、个性化推荐等功能不可用
+  
+  [2] 🔧 Configure 模式 - 全面配置（推荐日常使用）
+      • 3-5 分钟完成配置
+      • 个性化用户画像
+      • LLM 智能摘要
+      • 推送渠道设置
+      • 完整能力体验
+
+请选择 [1-2]: 
 ```
 
-### 9.2 统一配置向导
+**CLI 启动模式选择：**
 
-整合用户画像、兴趣偏好、日报定制、LLM配置于一体的交互式配置流程。
+```bash
+# Fast 模式（命令行直接启动）
+$ python -m src.cli start --mode fast
+
+# Configure 模式（完整配置）
+$ python -m src.cli start --mode configure
+
+# 交互式选择（默认）
+$ python -m src.cli start
+
+# Docker 环境变量指定模式
+$ docker run -e STARTUP_MODE=fast daily-agent
+$ docker run -e STARTUP_MODE=configure daily-agent
+```
+
+### 9.2 Fast 模式配置
+
+Fast 模式提供零配置开箱即用的体验，适合首次体验、临时使用或快速验证场景。
+
+**Fast 模式默认配置：**
+
+```python
+class FastModeConfig:
+    """Fast 模式默认配置"""
+    
+    def to_user_config(self) -> UserConfiguration:
+        return UserConfiguration(
+            profile=UserProfile(
+                industry="互联网/科技",
+                position="通用用户",
+                expertise=["科技", "商业"],
+                daily_time_minutes=15,
+                preferred_time="09:00"
+            ),
+            interests=InterestConfig(
+                core_topics=[
+                    {"name": "科技", "weight": 0.8},
+                    {"name": "商业", "weight": 0.8},
+                    {"name": "AI", "weight": 0.7},
+                    {"name": "互联网", "weight": 0.7}
+                ],
+                content_types=["news", "analysis"],
+                language_preference="zh_first",
+                content_depth="medium"
+            ),
+            daily=DailyConfig(
+                style="brief",
+                columns=[
+                    ColumnConfig(id="headlines", name="🔥 今日头条", max_items=5, order=1),
+                    ColumnConfig(id="tech", name="💻 科技", max_items=4, order=2),
+                    ColumnConfig(id="business", name="💼 商业", max_items=3, order=3),
+                    ColumnConfig(id="ai", name="🤖 AI", max_items=3, order=4)
+                ],
+                filter_rules=FilterRules(
+                    min_quality_score=60,
+                    time_window_hours=24,
+                    dedup_level="medium"
+                ),
+                summary=SummaryConfig(
+                    method="rule",  # 规则摘要，无需 LLM
+                    length="short"
+                )
+            ),
+            llm=None,  # Fast 模式不使用 LLM
+            channels=[],  # 推送渠道需后续手动配置
+            advanced=AdvancedConfig(
+                learning_enabled=False,  # 关闭学习（无个性化）
+                auto_update=True
+            )
+        )
+```
+
+**Fast 模式功能限制：**
+
+| 功能 | Fast 模式 | 说明 |
+|------|-----------|------|
+| 内容采集 | ✅ 完整 | 所有采集源正常工作 |
+| 内容清洗 | ✅ 完整 | 标准清洗流程 |
+| 规则摘要 | ✅ 可用 | 基础文本摘要 |
+| 时间排序 | ✅ 可用 | 按发布时间排序 |
+| **LLM 智能摘要** | ❌ 不可用 | 需配置 LLM |
+| **个性化排序** | ❌ 不可用 | 需用户画像学习 |
+| **智能去重** | ❌ 不可用 | 需 LLM 语义分析 |
+| **推送服务** | ❌ 不可用 | 需配置推送渠道 |
+| **反馈学习** | ❌ 不可用 | 需 Configure 模式 |
+| **冷启动学习** | ❌ 不可用 | 需完整用户画像 |
+
+**Fast 模式启动输出：**
+
+```bash
+$ python -m src.cli start --mode fast
+
+🚀 Daily Agent - Fast 模式
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚡ 正在初始化...
+  ✓ 数据库初始化完成
+  ✓ 默认配置加载完成
+  ✓ 通用模板应用完成
+
+📋 当前配置：
+  用户画像: 通用用户（互联网/科技）
+  兴趣标签: 科技、商业、AI、互联网
+  日报分栏: 4 个（头条、科技、商业、AI）
+  摘要模式: 规则摘要
+  推送渠道: 未配置
+
+✅ Fast 模式启动成功！
+
+📖 可用命令：
+  生成日报:    python -m src.cli generate
+  查看配置:    python -m src.cli config show
+  切换模式:    python -m src.cli setup --mode configure
+
+⚠️  提示：当前使用默认配置，部分高级功能未启用。
+    如需完整功能体验，请运行：python -m src.cli setup --mode configure
+
+🌐 Web 界面: http://localhost:8080
+📚 API 文档: http://localhost:8080/docs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**从 Fast 模式迁移到 Configure 模式：**
+
+```bash
+# 随时切换到完整配置
+$ python -m src.cli setup --mode configure
+
+📋 检测到当前为 Fast 模式配置
+💡 进入 Configure 模式后将启用：
+  • 个性化用户画像
+  • LLM 智能摘要
+  • 自动推送服务
+  • 持续学习优化
+
+是否继续？ [Y/n]: Y
+
+# 进入完整配置向导...
+```
+
+### 9.3 Configure 模式配置
+
+Configure 模式提供完整的交互式配置向导，通过 5 步配置获得全面的个性化能力。
 
 **启动命令：**
 
 ```bash
-# 交互式配置（默认）
-$ python -m src.cli setup
+# 启动 Configure 模式
+$ python -m src.cli start --mode configure
 
-# 使用预设模板快速配置
-$ python -m src.cli setup --template product_manager
-
-# 非交互式配置（用于自动化部署）
-$ python -m src.cli setup --non-interactive --config-file setup.yaml
+# 或在 Fast 模式后切换
+$ python -m src.cli setup --mode configure
 
 # 重新配置特定模块
 $ python -m src.cli setup --module profile      # 仅用户画像
@@ -1462,6 +1668,9 @@ $ python -m src.cli setup --module interests    # 仅兴趣偏好
 $ python -m src.cli setup --module daily        # 仅日报设置
 $ python -m src.cli setup --module llm          # 仅 LLM 配置
 $ python -m src.cli setup --all                 # 完整重新配置
+
+# 非交互式配置（用于自动化部署）
+$ python -m src.cli setup --non-interactive --config-file setup.yaml
 ```
 
 **完整配置流程：**
@@ -1720,7 +1929,7 @@ $ python -m src.cli setup
 按 Enter 启动服务...
 ```
 
-### 9.3 统一配置数据模型
+### 9.4 统一配置数据模型
 
 整合所有配置的统一数据结构，支持序列化和持久化。
 
@@ -1891,7 +2100,7 @@ channels:
       chat_id: "${TELEGRAM_CHAT_ID}"
 ```
 
-### 9.4 配置模板库
+### 9.5 配置模板库
 
 提供开箱即用的预设模板，覆盖主流用户场景。模板可在配置向导中直接选择，或用于非交互式部署。
 
@@ -2052,7 +2261,7 @@ $ python -m src.cli setup --non-interactive --template tech_developer
 $ docker run -e SETUP_TEMPLATE=product_manager daily-agent
 ```
 
-### 9.5 配置持久化与热更新
+### 9.6 配置持久化与热更新
 
 **配置存储架构：**
 
@@ -2177,7 +2386,7 @@ $ python -m src.cli config export --all --format json --output backup-$(date +%Y
 $ python -m src.cli config export --user user1 | python -m src.cli config import --user user2
 ```
 
-### 9.6 命令行配置管理
+### 9.7 命令行配置管理
 
 提供完整的 CLI 工具用于配置管理，支持交互式和非交互式两种模式。
 
@@ -2289,7 +2498,7 @@ $ python -m src.cli status
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-### 9.7 LLM 提供商配置详情
+### 9.8 LLM 提供商配置详情
 
 **OpenAI 配置：**
 ```yaml
@@ -2497,7 +2706,7 @@ $ python -m src.cli llm switch
 ✅ 模型可用
 ```
 
-### 9.8 冷启动推荐策略
+### 9.9 冷启动推荐策略
 
 新用户首次使用时，系统没有历史数据支撑个性化推荐。提供多种冷启动策略，让用户快速获得有价值的日报体验。
 
