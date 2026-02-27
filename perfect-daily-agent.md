@@ -14,6 +14,7 @@
 6. [交互与反馈](#6-交互与反馈)
 7. [系统与工程能力](#7-系统与工程能力)
 8. [智能化能力](#8-智能化能力)
+9. [OpenClaw Skill 规范](#9-openclaw-skill-规范)
 
 ---
 
@@ -295,6 +296,231 @@
 
 ---
 
+## 9. OpenClaw Skill 规范
+
+### 9.1 Skill 定义与结构
+
+```yaml
+Skill:
+  metadata:
+    name: skill-name           # Skill 唯一标识符
+    version: "1.0.0"          # 语义化版本
+    description: "描述"        # 功能描述
+    author: "作者"             # 开发者
+    category: "category"      # 分类标签
+    language: "zh/en"         # 支持语言
+  
+  capabilities:               # 能力声明
+    inputs:                   # 输入参数
+      - name: "param1"
+        type: "string"
+        required: true
+        description: "参数说明"
+    
+    outputs:                  # 输出结果
+      - name: "result"
+        type: "object"
+        description: "输出说明"
+    
+    triggers:                 # 触发方式
+      - schedule: "0 9 * * *"  # 定时触发
+      - webhook: "/endpoint"   # Webhook 触发
+      - event: "on_new_content" # 事件触发
+  
+  dependencies:               # 依赖声明
+    skills: ["base-skill"]    # 依赖的其他 Skill
+    apis: ["news-api"]        # 外部 API
+    models: ["gpt-4"]         # 需要的模型
+```
+
+### 9.2 Skill 分类体系
+
+| 分类 | 说明 | 示例 |
+|------|------|------|
+| **采集类 (Collector)** | 信息获取与抓取 | RSS采集、API拉取、网页爬虫 |
+| **处理类 (Processor)** | 内容处理与转换 | 清洗、摘要、翻译、分类 |
+| **分析类 (Analyzer)** | 智能分析与推理 | 情感分析、实体识别、趋势预测 |
+| **输出类 (Output)** | 结果输出与呈现 | 邮件推送、报告生成、可视化 |
+| **交互类 (Interactive)** | 用户交互与反馈 | 问答、指令处理、反馈收集 |
+| **编排类 (Orchestrator)** | 工作流编排与调度 | 任务调度、流程控制、异常处理 |
+
+### 9.3 Skill 开发规范
+
+#### 目录结构
+```
+skill-name/
+├── SKILL.md              # Skill 定义文档（必需）
+├── config.yaml           # 配置文件
+├── src/                  # 源代码目录
+│   ├── __init__.py
+│   ├── main.py           # 主入口
+│   └── utils.py          # 工具函数
+├── tests/                # 测试目录
+│   └── test_skill.py
+├── requirements.txt      # Python 依赖
+└── README.md             # 使用说明
+```
+
+#### SKILL.md 模板
+```markdown
+# Skill: skill-name
+
+## 概述
+简要描述 Skill 的功能和用途。
+
+## 能力
+- 能力1：描述
+- 能力2：描述
+
+## 输入/输出
+### 输入
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| param1 | string | 是 | 参数说明 |
+
+### 输出
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| result | object | 结果说明 |
+
+## 使用示例
+```json
+{
+  "input": {...},
+  "output": {...}
+}
+```
+
+## 依赖
+- 依赖1：说明
+- 依赖2：说明
+
+## 版本历史
+- v1.0.0: 初始版本
+```
+
+### 9.4 Skill 注册与发现
+
+```json
+{
+  "registry": {
+    "type": "local|remote|marketplace",
+    "endpoint": "https://skills.openclaw.io",
+    "authentication": "api-key|oauth|none"
+  },
+  "discovery": {
+    "search": {
+      "by_keyword": true,
+      "by_category": true,
+      "by_tag": true,
+      "by_capability": true
+    },
+    "filter": {
+      "rating": ">=4.0",
+      "downloads": ">=100",
+      "verified": true
+    }
+  }
+}
+```
+
+### 9.5 Skill 运行时接口
+
+```python
+# 标准接口定义
+class BaseSkill:
+    """所有 Skill 的基类"""
+    
+    def __init__(self, config: dict):
+        self.config = config
+        self.metadata = self._load_metadata()
+    
+    async def initialize(self) -> None:
+        """初始化 Skill"""
+        pass
+    
+    async def execute(self, context: Context) -> Result:
+        """执行 Skill 主逻辑"""
+        raise NotImplementedError
+    
+    async def health_check(self) -> HealthStatus:
+        """健康检查"""
+        return HealthStatus.HEALTHY
+    
+    async def shutdown(self) -> None:
+        """优雅关闭"""
+        pass
+
+# 上下文对象
+class Context:
+    user_id: str
+    session_id: str
+    input_data: dict
+    env_vars: dict
+    dependencies: dict  # 依赖的 Skill 实例
+```
+
+### 9.6 Skill 组合与编排
+
+```yaml
+# 工作流定义示例
+workflow:
+  name: "daily-report-generation"
+  version: "1.0.0"
+  
+  steps:
+    - id: "collect"
+      skill: "rss-collector"
+      inputs:
+        feeds: "${user.preferred_feeds}"
+      
+    - id: "filter"
+      skill: "content-filter"
+      inputs:
+        contents: "${collect.outputs.articles}"
+        keywords: "${user.interests}"
+      depends_on: ["collect"]
+      
+    - id: "summarize"
+      skill: "llm-summarizer"
+      inputs:
+        articles: "${filter.outputs.filtered}"
+        style: "${user.summary_style}"
+      depends_on: ["filter"]
+      
+    - id: "format"
+      skill: "markdown-formatter"
+      inputs:
+        content: "${summarize.outputs.summaries}"
+        template: "daily-report"
+      depends_on: ["summarize"]
+      
+    - id: "notify"
+      skill: "email-notifier"
+      inputs:
+        content: "${format.outputs.document}"
+        to: "${user.email}"
+      depends_on: ["format"]
+  
+  error_handling:
+    on_failure: "retry|skip|notify"
+    max_retries: 3
+    retry_delay: "5s"
+```
+
+### 9.7 Skill 质量管理
+
+| 质量维度 | 指标 | 要求 |
+|----------|------|------|
+| **功能完整性** | 接口实现度 | 100% 声明接口必须实现 |
+| **代码质量** | 测试覆盖率 | >= 80% |
+| **文档完整** | SKILL.md 完整性 | 必需字段全部填写 |
+| **性能** | 响应时间 | P99 < 1s |
+| **可靠性** | 成功率 | >= 99.5% |
+| **安全性** | 漏洞扫描 | 无高危漏洞 |
+
+---
+
 ## 🎯 能力评估矩阵
 
 | 能力维度 | 基础版 | 进阶版 | 专业版 |
@@ -307,6 +533,7 @@
 | 用户规模 | < 100 | 100-10k | > 10k |
 | 多语言 | 单语言 | 多语言 | 全语言 |
 | 交互方式 | 被动接收 | 简单交互 | 智能对话 |
+| Skill 生态 | 单 Skill | 多 Skill | 完整 Skill 市场 |
 
 ---
 
