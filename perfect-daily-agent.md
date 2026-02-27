@@ -591,76 +591,230 @@ authenticated_sources:
       - url: "https://paid-news.com/feed"
 ```
 
-**安全存储规范：**
+**部署场景与配置方式：**
+
+本系统支持两种部署模式，鉴权配置需根据部署方式调整：
+
+| 部署方式 | 适用场景 | 配置方式 |
+|----------|----------|----------|
+| **独立部署** | 个人服务器一键部署 | `.env` 文件 + 环境变量 |
+| **OpenClaw Skill** | 集成到 OpenClaw 生态 | Skill 配置文件 + 环境变量注入 |
+
+#### 独立部署配置（Docker 方式）
+
+**1. 环境变量配置（.env 文件）**
+
+```bash
+# .env 文件示例
+# 复制 .env.example 为 .env 并填写实际值
+
+# ===== Slack 配置 =====
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_WORKSPACE=mycompany
+
+# ===== Discord 配置 =====
+DISCORD_BOT_TOKEN=your-bot-token
+
+# ===== 企业微信配置 =====
+WECOM_CORP_ID=wwxxxxxxxxxxxxxxxx
+WECOM_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+WECOM_AGENT_ID=1000002
+
+# ===== 飞书配置 =====
+LARK_APP_ID=cli_xxxxxxxxxx
+LARK_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ===== Notion 配置 =====
+NOTION_INTEGRATION_TOKEN=secret_xxxxxxxxxx
+
+# ===== 私有 RSS =====
+PAID_NEWS_USER=your-username
+PAID_NEWS_PASS=your-password
+```
+
+**2. Docker 部署命令**
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/user/daily-agent.git
+cd daily-agent
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件填入你的 Token
+
+# 3. 启动服务
+docker-compose up -d
+```
+
+**3. Docker Compose 配置**
+
 ```yaml
-security:
-  # 凭证存储
-  credential_storage:
-    method: "vault"           # vault | env | kms
-    vault_provider: "hashicorp"  # hashicorp | aws_secrets | azure_keyvault
-    encryption: "aes-256-gcm"
-    key_rotation_days: 90
-  
-  # 传输安全
-  transmission:
-    tls_version: "1.3"
-    certificate_pinning: true
+version: '3.8'
+services:
+  daily-agent:
+    image: daily-agent:latest
+    container_name: daily-agent
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    restart: unless-stopped
     
-  # 访问控制
-  access_control:
-    user_binding: true        # 凭证绑定到具体用户
-    scope_limitation: true    # 最小权限原则
-    audit_logging: true       # 记录访问日志
+  # 可选：配合 Redis 缓存
+  redis:
+    image: redis:alpine
+    container_name: daily-redis
+    restart: unless-stopped
 ```
 
-**凭证管理界面：**
-```
-【鉴权源管理】
+#### OpenClaw Skill 集成配置
 
-已配置来源（3）：
-┌─────────────────────────────────────┐
-│ 🟢 公司 Slack  │ 已连接 │ 编辑 │ 删除 │
-│ 🟢 飞书知识库  │ 已连接 │ 编辑 │ 删除 │
-│ 🔴 Notion     │ 失效   │ 重连 │ 删除 │
-└─────────────────────────────────────┘
+当作为 OpenClaw Skill 集成时，配置通过 Skill 的 `config.yaml` 声明，实际凭证由 OpenClaw 运行时注入。
 
-[➕ 添加新来源]
+**Skill 配置文件（config.yaml）：**
 
-【添加鉴权源】
-选择平台：
-[Slack] [Discord] [企微] [飞书] [Notion] [RSS+认证] [Custom API]
-
-授权方式：
-○ OAuth 授权（推荐）
-○ 手动输入 Token
-○ 上传配置文件
-```
-
-**权限请求流程：**
-1. **OAuth 授权**：跳转平台授权页 → 用户确认权限 → 自动获取 Token
-2. **Token 输入**：用户从平台获取 Token → 安全输入 → 验证有效性
-3. **配置导入**：上传配置文件（如 `.env` 或 JSON）→ 解析并验证
-
-**健康检查与告警：**
 ```yaml
-health_check:
-  interval: "1h"
-  timeout: "30s"
+skill:
+  name: daily-agent
+  version: "1.0.0"
   
-  checks:
-    - name: "token_validity"
-      action: "refresh_if_expired"
-      
-    - name: "permission_scope"
-      action: "notify_if_insufficient"
-      
-    - name: "source_reachability"
-      action: "alert_if_unreachable"
+  # 声明需要的环境变量
+  required_env:
+    - SLACK_BOT_TOKEN
+    - DISCORD_BOT_TOKEN
+    - WECOM_CORP_ID
+    - WECOM_SECRET
+    # ... 其他所需变量
   
-  notifications:
-    on_auth_failure: "immediate"
-    on_token_expiry: "24h_before"
+  # 可选环境变量（有默认值）
+  optional_env:
+    DAILY_PUSH_TIME: "09:00"
+    MAX_ITEMS_PER_COLUMN: "10"
+    LOG_LEVEL: "info"
+
+  # 配置结构定义（用于 OpenClaw UI 生成配置表单）
+  config_schema:
+    columns:
+      type: array
+      description: "日报分栏配置"
+      # ... 详见 6.3.1 内容要求配置
+    
+    authenticated_sources:
+      type: array
+      description: "鉴权数据源"
+      items:
+        - type: object
+          properties:
+            type: { enum: [slack, discord, wecom, lark, notion] }
+            name: { type: string }
+            enabled: { type: boolean }
+            # 凭证字段通过 env 映射，不在此处硬编码
 ```
+
+**OpenClaw 集成时的凭证注入：**
+
+```yaml
+# openclaw.yaml（OpenClaw 主配置）
+skills:
+  daily-agent:
+    enabled: true
+    env:
+      # 方式1：直接内联（开发测试用，生产不推荐）
+      SLACK_BOT_TOKEN: "${VAULT:slack_token}"
+      
+      # 方式2：引用 OpenClaw 密钥管理
+      DISCORD_BOT_TOKEN: "${secrets.discord_token}"
+      
+      # 方式3：从 .env 文件加载
+      env_file: "/path/to/daily-agent.env"
+```
+
+#### 凭证安全规范
+
+由于部署场景限制，安全方案简化为：
+
+| 安全措施 | 实现方式 | 说明 |
+|----------|----------|------|
+| **存储** | 环境变量 | Token 仅保存在服务器环境变量或 `.env` 文件 |
+| **传输** | HTTPS/TLS | 所有 API 调用强制 HTTPS |
+| **日志脱敏** | 自动过滤 | 日志中自动隐藏 Token 等敏感信息 |
+| **权限最小化** | 按需申请 | 各平台 Token 仅申请必要权限 |
+| **文件权限** | 600 | `.env` 文件权限设为仅所有者可读写 |
+
+**`.env` 文件安全设置：**
+
+```bash
+# 创建时设置权限
+chmod 600 .env
+
+# .gitignore 中排除
+echo ".env" >> .gitignore
+echo "*.env" >> .gitignore
+```
+
+**日志脱敏示例：**
+
+```python
+# 配置日志时自动脱敏敏感字段
+SENSITIVE_FIELDS = ['token', 'secret', 'password', 'key']
+
+# 脱敏后日志示例
+# 原始: "Request to Slack API with token: xoxb-1234-5678"
+# 脱敏: "Request to Slack API with token: xoxb-****-****"
+```
+
+#### 配置验证与启动检查
+
+**启动时自动检查：**
+
+```bash
+$ docker-compose up
+
+[INFO] Daily Agent v1.0.0 starting...
+[INFO] Loading configuration from environment variables
+
+[CHECK] Slack Bot Token: ✓ Valid
+[CHECK] Discord Bot Token: ⚠ Not configured (skipped)
+[CHECK] WeCom Corp ID: ✓ Valid
+[CHECK] WeCom Secret: ✓ Valid
+[CHECK] Lark App ID: ✓ Valid
+[CHECK] Notion Token: ✗ Invalid or expired
+
+[WARN] Notion source disabled due to auth failure
+[INFO] Successfully loaded 4/5 authenticated sources
+[INFO] Server started on port 8080
+```
+
+**手动验证命令：**
+
+```bash
+# 验证所有配置
+docker exec daily-agent python -m cli verify-config
+
+# 测试特定源连接
+docker exec daily-agent python -m cli test-source slack
+```
+
+#### 配置热更新（无需重启）
+
+对于非凭证类配置（如分栏设置、过滤规则），支持热更新：
+
+```bash
+# 修改 config/columns.yaml 后触发热更新
+curl -X POST http://localhost:8080/api/v1/reload
+
+# 或通过 CLI
+docker exec daily-agent python -m cli reload
+```
+
+**热更新范围：**
+- ✅ 分栏配置（columns）
+- ✅ 过滤规则（filters）
+- ✅ 推送设置（schedule）
+- ❌ 环境变量（需重启容器）
+- ❌ 鉴权凭证（需重启容器）
 
 ### 6.4 智能问答
 
@@ -681,44 +835,85 @@ health_check:
 
 ### 7.1 架构设计
 
+#### 简化架构（一键部署版）
+
 ```
-系统架构：
+单机/容器架构：
 ┌─────────────────────────────────────────┐
-│              接入层 (API/Gateway)         │
+│           FastAPI 应用服务                │
+│  ┌─────────┬─────────┬─────────┐       │
+│  │ 采集器  │ 处理器  │ 推送器  │       │
+│  └────┬────┴────┬────┴────┬────┘       │
+│       └─────────┼─────────┘            │
+│              调度器(APScheduler)        │
 ├─────────────────────────────────────────┤
-│  采集服务  │  处理服务  │  推荐服务  │  推送服务  │
-├─────────────────────────────────────────┤
-│         消息队列 (MQ/Kafka)              │
-├─────────────────────────────────────────┤
-│  存储层：DB / 缓存 / 搜索引擎 / 对象存储   │
+│  SQLite/PostgreSQL  │  Redis(可选)     │
+└─────────────────────────────────────────┘
+```
+
+#### OpenClaw Skill 架构
+
+```
+OpenClaw 集成模式：
+┌─────────────────────────────────────────┐
+│           OpenClaw 运行时                │
+│  ┌─────────────────────────────────┐   │
+│  │      Daily Agent Skill          │   │
+│  │  ┌───────┬───────┬───────┐     │   │
+│  │  │ Skill │ Skill │ Skill │ ... │   │
+│  │  │Config │ Logic │ Hooks │     │   │
+│  │  └───┬───┴───┬───┴───┬───┘     │   │
+│  └──────┼───────┼───────┼─────────┘   │
+│         └───────┼───────┘              │
+│            OpenClaw 基础设施            │
+│     (调度、存储、配置、凭证管理)          │
 └─────────────────────────────────────────┘
 ```
 
 ### 7.2 数据存储
 
-| 存储类型 | 用途 |
-|----------|------|
-| **关系型数据库** | 用户信息、配置、元数据 |
-| **文档数据库** | 原始内容、处理后的内容 |
-| **向量数据库** | 内容向量、语义搜索 |
-| **缓存** | 热点数据、会话信息 |
-| **搜索引擎** | 全文检索、日志分析 |
-| **对象存储** | 图片、PDF 等附件 |
+| 存储类型 | 用途 | 推荐方案 |
+|----------|------|----------|
+| **关系型数据库** | 用户配置、内容元数据 | SQLite(单机) / PostgreSQL |
+| **缓存** | 热点数据、会话、去重 | Python dict / Redis |
+| **文件存储** | 配置、日志、导出文件 | 本地文件系统 |
+
+**数据目录结构：**
+```
+data/
+├── daily.db              # SQLite 数据库
+├── cache/                # 缓存文件
+├── exports/              # 导出的日报
+├── logs/                 # 日志文件
+└── config/
+    ├── columns.yaml      # 分栏配置（热更新）
+    └── filters.yaml      # 过滤规则
+```
 
 ### 7.3 性能与可靠性
 
-- **并发处理**：支持大规模数据采集与处理
-- **容错机制**：失败重试、降级策略、熔断保护
-- **监控告警**：系统指标监控、异常告警
-- **数据备份**：定期备份、灾难恢复
-- **水平扩展**：支持服务扩容
+| 场景 | 策略 | 实现方式 |
+|------|------|----------|
+| **并发采集** | 异步 IO | `httpx.AsyncClient` + `asyncio` |
+| **失败重试** | 指数退避 | `tenacity` 装饰器 |
+| **任务调度** | 定时触发 | `APScheduler` |
+| **服务健康** | 心跳检测 | `/health` 端点 |
+
+**资源限制（适合 2核4G 服务器）：**
+- 并发采集数：5-10 个源同时
+- 单条内容最大长度：100KB
+- 保留天数：30 天（可配置）
+- 日志轮转：每天一份，保留 7 天
 
 ### 7.4 安全与隐私
 
-- **数据加密**：传输加密、存储加密
-- **访问控制**：身份认证、权限管理
-- **隐私保护**：用户数据脱敏、GDPR 合规
-- **审计日志**：操作记录、可追溯
+| 层面 | 措施 | 实现 |
+|------|------|------|
+| **凭证存储** | 环境变量 | `.env` 文件 + `os.environ` |
+| **传输安全** | HTTPS 强制 | 对外 API 全走 HTTPS |
+| **日志脱敏** | 自动过滤 | 敏感字段正则替换 |
+| **访问控制** | Token 校验 | API 请求头校验 |
+| **数据隔离** | 用户隔离 | 单用户部署天然隔离 |
 
 ---
 
@@ -1125,14 +1320,74 @@ workflow:
 
 ## 📚 技术栈参考
 
-| 层级 | 推荐技术 |
-|------|----------|
-| **采集** | Scrapy、Playwright、Celery、Apache Kafka |
-| **存储** | PostgreSQL、MongoDB、Redis、Elasticsearch、Pinecone |
-| **处理** | Python、spaCy、Hugging Face Transformers、LangChain |
-| **模型** | OpenAI API、Claude、开源 LLM (Llama、Qwen) |
-| **服务** | FastAPI、Docker、Kubernetes、Nginx |
-| **前端** | React/Vue、React Native、Electron |
+### 简化版技术栈（一键部署推荐）
+
+适用于个人服务器部署和 OpenClaw Skill 集成的最小化技术栈：
+
+| 层级 | 推荐技术 | 说明 |
+|------|----------|------|
+| **采集** | Playwright、httpx、aiohttp | 轻量级异步爬虫，无需 Scrapy 重型框架 |
+| **存储** | SQLite / PostgreSQL、Redis | SQLite 适合单机部署，PostgreSQL 适合多用户 |
+| **处理** | Python、LangChain、Jinja2 | 简洁的文本处理与模板渲染 |
+| **模型** | OpenAI API / OpenRouter / 本地 Ollama | 优先使用 API，可选本地模型 |
+| **服务** | FastAPI、Docker | 单容器部署，无需 Kubernetes |
+| **调度** | APScheduler / Celery Lite | 轻量级定时任务 |
+| **配置** | Pydantic Settings、python-dotenv | 环境变量管理 |
+
+### 部署方式对比
+
+| 部署方式 | 复杂度 | 适用场景 | 资源需求 |
+|----------|--------|----------|----------|
+| **Docker 单机** | ⭐ 低 | 个人使用、小团队 | 2核4G 即可 |
+| **OpenClaw Skill** | ⭐ 低 | 已有 OpenClaw 生态用户 | 依赖 OpenClaw 运行时 |
+| **Docker Compose** | ⭐⭐ 中 | 需要独立 Redis/DB | 4核8G 推荐 |
+| **K8s 集群** | ⭐⭐⭐⭐ 高 | 企业级大规模部署 | 需要运维能力 |
+
+### 快速启动依赖
+
+```dockerfile
+# 最小化 Dockerfile 示例
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+EXPOSE 8080
+
+CMD ["python", "-m", "daily_agent"]
+```
+
+```txt
+# requirements.txt（精简版）
+fastapi==0.104.0
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+httpx==0.25.0
+playwright==1.40.0
+apscheduler==3.10.0
+redis==5.0.0
+sqlalchemy==2.0.0
+langchain==0.1.0
+openai==1.0.0
+jinja2==3.1.0
+```
+
+### 架构选型建议
+
+**个人用户 / 一键部署：**
+- 数据库：SQLite（零配置）或 PostgreSQL（Docker 一键启动）
+- 缓存：内存字典 或 Redis（可选）
+- 任务队列：APScheduler（内置）或 Celery + Redis
+- LLM：OpenAI API / Claude API（无需本地 GPU）
+
+**OpenClaw Skill 集成：**
+- 利用 OpenClaw 的配置管理和凭证注入
+- 复用 OpenClaw 的调度器（如支持）
+- 遵循 Skill 接口规范（详见第9章）
 
 ---
 
