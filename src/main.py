@@ -3,7 +3,7 @@
 """
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -115,7 +115,7 @@ async def health_check() -> HealthStatus:
     return HealthStatus(
         status="healthy",
         version="1.0.0",
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 
@@ -133,7 +133,7 @@ async def generate_report(
     - 支持强制刷新
     """
     try:
-        date = request.date or datetime.utcnow()
+        date = request.date or datetime.now(timezone.utc)
         
         # 检查是否已存在
         if not request.force_refresh:

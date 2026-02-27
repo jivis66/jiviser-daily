@@ -3,7 +3,7 @@
 使用 SQLAlchemy 2.0 语法
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List, Optional
 
 from sqlalchemy import (
@@ -16,6 +16,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from src.config import get_settings
 
 settings = get_settings()
+
+
+def utc_now() -> datetime:
+    """获取当前 UTC 时间"""
+    return datetime.now(timezone.utc)
 
 
 class Base(DeclarativeBase):
@@ -39,7 +44,7 @@ class ContentItemDB(Base):
     
     author: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     publish_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
-    fetch_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    fetch_time: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     
     topics: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     entities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
@@ -82,7 +87,7 @@ class DailyReportDB(Base):
     is_sent: Mapped[bool] = mapped_column(default=False)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     
     items = relationship("DailyReportItemDB", back_populates="daily_report")
 
@@ -129,8 +134,8 @@ class UserProfileDB(Base):
     saved_items: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     dismissed_items: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class UserFeedbackDB(Base):
@@ -142,7 +147,7 @@ class UserFeedbackDB(Base):
     content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     feedback_type: Mapped[str] = mapped_column(String(50), nullable=False)  # like/dislike/save/dismiss
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class AuthCredentialDB(Base):
@@ -163,8 +168,8 @@ class AuthCredentialDB(Base):
     
     # 时间戳
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     last_verified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # 状态
@@ -285,7 +290,7 @@ class ContentRepository:
     
     async def delete_old(self, days: int) -> int:
         """删除旧内容"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = utc_now() - timedelta(days=days)
         result = await self.session.execute(
             delete(ContentItemDB).where(ContentItemDB.fetch_time < cutoff)
         )
@@ -368,7 +373,7 @@ class AuthCredentialRepository:
             existing.expires_at = credential.expires_at
             existing.is_valid = True
             existing.invalid_reason = None
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utc_now()
             await self.session.flush()
             return existing
         else:
@@ -402,7 +407,7 @@ class AuthCredentialRepository:
     
     async def get_expiring_soon(self, hours: int = 72) -> List[AuthCredentialDB]:
         """获取即将过期的认证凭证"""
-        threshold = datetime.utcnow() + timedelta(hours=hours)
+        threshold = utc_now() + timedelta(hours=hours)
         result = await self.session.execute(
             select(AuthCredentialDB).where(
                 AuthCredentialDB.is_valid == True,
@@ -423,7 +428,7 @@ class AuthCredentialRepository:
         """更新最后验证时间"""
         credential = await self.get_by_source(source_name)
         if credential:
-            credential.last_verified = datetime.utcnow()
+            credential.last_verified = utc_now()
             await self.session.flush()
     
     async def delete(self, source_name: str) -> bool:

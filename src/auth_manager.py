@@ -7,7 +7,7 @@ import re
 import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
@@ -338,7 +338,7 @@ class AuthManager:
         credentials = encrypt_credentials(parsed["raw_cookies"])
         
         # 创建数据库记录
-        expires_at = datetime.utcnow() + timedelta(days=config.expires_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=config.expires_days)
         
         credential = AuthCredentialDB(
             source_name=source_name,
@@ -525,7 +525,7 @@ class AuthManager:
                 "source_name": cred.source_name,
                 "display_name": config.display_name if config else cred.source_name,
                 "expires_at": cred.expires_at,
-                "hours_remaining": (cred.expires_at - datetime.utcnow()).total_seconds() / 3600
+                "hours_remaining": (cred.expires_at - datetime.now(timezone.utc)).total_seconds() / 3600
             })
         
         return result

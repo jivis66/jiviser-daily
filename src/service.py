@@ -2,7 +2,7 @@
 核心业务服务
 整合采集、处理、筛选、生成、推送流程
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,7 +156,7 @@ class DailyAgentService:
         Returns:
             DailyReport: 生成的日报
         """
-        date = date or datetime.utcnow()
+        date = date or datetime.now(timezone.utc)
         print(f"[Service] 生成日报: {date.date()}, user={user_id}")
         
         # 1. 采集新内容
@@ -342,7 +342,7 @@ class DailyAgentService:
             # 更新发送状态
             if any(r.success for r in results.values()):
                 db_report.is_sent = True
-                db_report.sent_at = datetime.utcnow()
+                db_report.sent_at = datetime.now(timezone.utc)
                 await report_repo.update(db_report)
             
             return results

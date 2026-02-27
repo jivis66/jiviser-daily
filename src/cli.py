@@ -3,7 +3,7 @@
 """
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import click
 from rich.console import Console
@@ -308,7 +308,7 @@ def status():
                 content_repo = ContentRepository(session)
                 report_repo = DailyReportRepository(session)
                 
-                today = datetime.utcnow().date()
+                today = datetime.now(timezone.utc).date()
                 yesterday = today - timedelta(days=1)
                 
                 # 获取今日采集数量
@@ -316,7 +316,7 @@ def status():
                 console.print(f"  采集内容: {len(daily_items)} 条")
                 
                 # 获取今日日报
-                today_report = await report_repo.get_by_date("default", datetime.utcnow())
+                today_report = await report_repo.get_by_date("default", datetime.now(timezone.utc))
                 if today_report:
                     console.print(f"  生成日报: 1 份 ({today_report.total_items} 条内容)")
                     console.print(f"  推送状态: {'已推送' if today_report.is_sent else '未推送'}")
@@ -381,9 +381,9 @@ def auth_list():
             # 计算状态
             if not cred["is_valid"]:
                 status = "[red]✗ 失效[/red]"
-            elif cred["expires_at"] and cred["expires_at"] < datetime.utcnow():
+            elif cred["expires_at"] and cred["expires_at"] < datetime.now(timezone.utc):
                 status = "[red]✗ 已过期[/red]"
-            elif cred["expires_at"] and (cred["expires_at"] - datetime.utcnow()).days <= 3:
+            elif cred["expires_at"] and (cred["expires_at"] - datetime.now(timezone.utc)).days <= 3:
                 status = "[yellow]⚠ 即将过期[/yellow]"
             else:
                 status = "[green]✓ 有效[/green]"

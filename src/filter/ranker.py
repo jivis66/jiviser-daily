@@ -1,7 +1,7 @@
 """
 内容排序模块
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from src.models import ContentItem, UserProfile
@@ -80,7 +80,7 @@ class ContentRanker:
         user_profile: Optional[UserProfile]
     ) -> List[ContentItem]:
         """混合排序 - 综合多种因素"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         scored_items = []
         for item in items:
