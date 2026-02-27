@@ -397,5 +397,106 @@ def auth_guide():
     console.print("  [cyan]python -m src.cli auth test jike[/cyan] - 测试即刻认证")
 
 
+# ============ 启动设置向导命令 ============
+
+@cli.group()
+def setup():
+    """启动设置向导 - 配置用户画像、兴趣和日报"""
+    pass
+
+
+@setup.command("wizard")
+@click.option("--user", "-u", default="default", help="用户 ID")
+def setup_wizard(user: str):
+    """运行完整设置向导"""
+    async def _wizard():
+        from src.setup_wizard import SetupWizard
+        
+        wizard = SetupWizard(user_id=user)
+        await wizard.run_full_setup()
+    
+    asyncio.run(_wizard())
+
+
+@setup.command("export")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.option("--format", "-f", type=click.Choice(["yaml", "json"]), default="yaml", help="导出格式")
+@click.option("--output", "-o", help="输出文件路径")
+def setup_export(user: str, format: str, output: str):
+    """导出用户配置"""
+    async def _export():
+        from src.setup_wizard import export_config
+        
+        try:
+            filepath = await export_config(user_id=user, format=format, output=output)
+            console.print(f"[green]✅ 配置已导出到: {filepath}[/green]")
+        except ValueError as e:
+            console.print(f"[red]✗ {e}[/red]")
+    
+    asyncio.run(_export())
+
+
+@setup.command("import")
+@click.argument("filepath")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.option("--force", "-f", is_flag=True, help="强制覆盖现有配置")
+def setup_import(filepath: str, user: str, force: bool):
+    """导入用户配置"""
+    async def _import():
+        from src.setup_wizard import import_config
+        
+        try:
+            success = await import_config(filepath, user_id=user, overwrite=force)
+            if success:
+                console.print(f"[green]✅ 配置导入成功[/green]")
+            else:
+                console.print(f"[yellow]⚠️ 用户已有配置，使用 --force 覆盖[/yellow]")
+        except Exception as e:
+            console.print(f"[red]✗ 导入失败: {e}[/red]")
+    
+    asyncio.run(_import())
+
+
+@setup.command("templates")
+def setup_templates():
+    """查看可用配置模板"""
+    from src.setup_wizard import PROFILE_TEMPLATES
+    
+    console.print("[bold blue]可用配置模板[/bold blue]\n")
+    
+    table = Table()
+    table.add_column("模板ID", style="cyan")
+    table.add_column("名称", style="green")
+    table.add_column("描述")
+    table.add_column("阅读时间")
+    
+    for key, template in PROFILE_TEMPLATES.items():
+        table.add_row(
+            key,
+            template.name,
+            template.description,
+            f"{template.daily_time_minutes} 分钟"
+        )
+    
+    console.print(table)
+    
+    console.print("\n[bold]使用模板快速设置：[/bold]")
+    console.print("  [cyan]python -m src.cli setup wizard[/cyan]  - 启动向导并选择模板")
+
+
+# 简化命令别名
+@cli.command()
+@click.option("--user", "-u", default="default", help="用户 ID")
+def quickstart(user: str):
+    """快速开始 - 运行完整设置向导"""
+    async def _quickstart():
+        from src.setup_wizard import SetupWizard
+        
+        wizard = SetupWizard(user_id=user)
+        await wizard.run_full_setup()
+    
+    asyncio.run(_quickstart())
+
+
 if __name__ == "__main__":
     cli()

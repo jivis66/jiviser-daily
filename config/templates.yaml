@@ -1,0 +1,380 @@
+# Daily Agent 预设配置模板
+# 用于快速启动和用户画像匹配
+
+templates:
+  # 技术开发者模板
+  tech_developer:
+    name: "👨‍💻 技术开发者"
+    description: "专注技术趋势、开源项目、编程实践"
+    profile:
+      industry: "互联网/科技"
+      position: "技术开发者"
+      expertise: ["软件开发", "开源技术", "系统架构"]
+      experience_level: "senior"
+      company_size: "startup"
+      daily_time_minutes: 20
+    interests:
+      core_topics:
+        - {name: "人工智能", weight: 1.0}
+        - {name: "大语言模型", weight: 0.95}
+        - {name: "开源项目", weight: 0.9}
+        - {name: "编程语言", weight: 0.85}
+        - {name: "云原生", weight: 0.8}
+      content_types: ["tutorial", "news", "analysis"]
+      source_preferences:
+        media: 0.7
+        community: 0.95
+        social: 0.8
+        academic: 0.6
+      language_preference: "zh_first"
+      content_depth: "deep"
+      novelty_preference: "balanced"
+    daily:
+      style: "detailed"
+      columns:
+        - id: "github"
+          name: "🔥 GitHub 趋势"
+          enabled: true
+          max_items: 5
+          order: 1
+        - id: "ai_tech"
+          name: "🤖 AI/技术"
+          enabled: true
+          max_items: 5
+          order: 2
+        - id: "dev_tools"
+          name: "🛠️ 开发工具"
+          enabled: true
+          max_items: 3
+          order: 3
+        - id: "tech_news"
+          name: "📰 科技新闻"
+          enabled: true
+          max_items: 3
+          order: 4
+      filter_rules:
+        min_quality_score: 65
+        time_window_hours: 24
+        dedup_level: "medium"
+      summary:
+        method: "llm"
+        length: "medium"
+        include_key_points: true
+
+  # 产品经理模板
+  product_manager:
+    name: "💼 产品经理"
+    description: "关注产品设计、用户增长、行业动态"
+    profile:
+      industry: "互联网/科技"
+      position: "产品经理"
+      expertise: ["产品设计", "用户研究", "数据分析"]
+      experience_level: "senior"
+      company_size: "mid"
+      daily_time_minutes: 20
+    interests:
+      core_topics:
+        - {name: "产品设计", weight: 1.0}
+        - {name: "用户增长", weight: 0.9}
+        - {name: "用户体验", weight: 0.9}
+        - {name: "商业模式", weight: 0.8}
+        - {name: "AI应用", weight: 0.85}
+      content_types: ["analysis", "product_review", "news"]
+      source_preferences:
+        media: 0.9
+        community: 0.7
+        social: 0.8
+        academic: 0.4
+      language_preference: "zh_first"
+      content_depth: "medium"
+      novelty_preference: "trending"
+    daily:
+      style: "brief"
+      columns:
+        - id: "headlines"
+          name: "🔥 今日头条"
+          enabled: true
+          max_items: 3
+          order: 1
+        - id: "product_hunt"
+          name: "🚀 Product Hunt"
+          enabled: true
+          max_items: 5
+          order: 2
+        - id: "ai_apps"
+          name: "🤖 AI应用"
+          enabled: true
+          max_items: 4
+          order: 3
+        - id: "business"
+          name: "💰 商业动态"
+          enabled: true
+          max_items: 3
+          order: 4
+      filter_rules:
+        min_quality_score: 60
+        time_window_hours: 24
+        dedup_level: "medium"
+      summary:
+        method: "rule"
+        length: "short"
+        include_key_points: true
+
+  # 投资人模板
+  investor:
+    name: "💰 投资人"
+    description: "关注市场趋势、创业公司、财报数据"
+    profile:
+      industry: "金融/投资"
+      position: "投资人/分析师"
+      expertise: ["投资分析", "市场研究", "财务分析"]
+      experience_level: "expert"
+      company_size: "enterprise"
+      daily_time_minutes: 30
+    interests:
+      core_topics:
+        - {name: "创业公司", weight: 1.0}
+        - {name: "投融资", weight: 0.95}
+        - {name: "市场趋势", weight: 0.9}
+        - {name: "财报分析", weight: 0.85}
+        - {name: "宏观经济", weight: 0.7}
+      content_types: ["news", "analysis"]
+      source_preferences:
+        media: 0.95
+        community: 0.6
+        social: 0.7
+        academic: 0.5
+      language_preference: "zh_first"
+      content_depth: "medium"
+      novelty_preference: "trending"
+    daily:
+      style: "data"
+      columns:
+        - id: "market"
+          name: "📈 市场动态"
+          enabled: true
+          max_items: 5
+          order: 1
+        - id: "funding"
+          name: "💰 融资信息"
+          enabled: true
+          max_items: 5
+          order: 2
+        - id: "earnings"
+          name: "📊 财报速递"
+          enabled: true
+          max_items: 3
+          order: 3
+        - id: "analysis"
+          name: "🔍 深度分析"
+          enabled: true
+          max_items: 3
+          order: 4
+      filter_rules:
+        min_quality_score: 70
+        time_window_hours: 24
+        dedup_level: "high"
+      summary:
+        method: "llm"
+        length: "medium"
+        include_key_points: true
+
+  # 商业分析师模板
+  business_analyst:
+    name: "📊 商业分析师"
+    description: "关注行业研究、市场数据、竞争分析"
+    profile:
+      industry: "咨询/商业分析"
+      position: "商业分析师"
+      expertise: ["行业研究", "数据分析", "战略规划"]
+      experience_level: "senior"
+      company_size: "enterprise"
+      daily_time_minutes: 25
+    interests:
+      core_topics:
+        - {name: "行业研究", weight: 1.0}
+        - {name: "市场数据", weight: 0.95}
+        - {name: "竞争分析", weight: 0.9}
+        - {name: "商业模式", weight: 0.85}
+        - {name: "战略咨询", weight: 0.8}
+      content_types: ["analysis", "research", "news"]
+      source_preferences:
+        media: 0.9
+        community: 0.5
+        social: 0.6
+        academic: 0.7
+      language_preference: "zh_first"
+      content_depth: "deep"
+      novelty_preference: "balanced"
+    daily:
+      style: "detailed"
+      columns:
+        - id: "headlines"
+          name: "🔥 今日头条"
+          enabled: true
+          max_items: 4
+          order: 1
+        - id: "industry"
+          name: "🏭 行业研究"
+          enabled: true
+          max_items: 5
+          order: 2
+        - id: "data_insights"
+          name: "📈 数据洞察"
+          enabled: true
+          max_items: 4
+          order: 3
+        - id: "reports"
+          name: "📑 研报精选"
+          enabled: true
+          max_items: 3
+          order: 4
+      filter_rules:
+        min_quality_score: 70
+        time_window_hours: 48
+        dedup_level: "high"
+      summary:
+        method: "llm"
+        length: "long"
+        include_key_points: true
+
+  # 设计师模板
+  designer:
+    name: "🎨 设计师"
+    description: "关注设计趋势、创意灵感、设计工具"
+    profile:
+      industry: "互联网/科技"
+      position: "设计师"
+      expertise: ["UI/UX设计", "创意设计", "设计工具"]
+      experience_level: "mid"
+      company_size: "mid"
+      daily_time_minutes: 15
+    interests:
+      core_topics:
+        - {name: "UI/UX设计", weight: 1.0}
+        - {name: "设计趋势", weight: 0.95}
+        - {name: "创意灵感", weight: 0.9}
+        - {name: "设计工具", weight: 0.85}
+        - {name: "AI设计", weight: 0.8}
+      content_types: ["inspiration", "tutorial", "news"]
+      source_preferences:
+        media: 0.8
+        community: 0.9
+        social: 0.85
+        academic: 0.3
+      language_preference: "zh_first"
+      content_depth: "medium"
+      novelty_preference: "trending"
+    daily:
+      style: "brief"
+      columns:
+        - id: "design_trends"
+          name: "🎨 设计趋势"
+          enabled: true
+          max_items: 5
+          order: 1
+        - id: "inspiration"
+          name: "✨ 创意灵感"
+          enabled: true
+          max_items: 4
+          order: 2
+        - id: "tools"
+          name: "🛠️ 设计工具"
+          enabled: true
+          max_items: 3
+          order: 3
+        - id: "resources"
+          name: "📚 资源推荐"
+          enabled: true
+          max_items: 3
+          order: 4
+      filter_rules:
+        min_quality_score: 55
+        time_window_hours: 24
+        dedup_level: "low"
+      summary:
+        method: "rule"
+        length: "short"
+        include_key_points: false
+
+  # 综合资讯模板
+  general:
+    name: "📰 综合资讯"
+    description: "平衡的科技、商业、社会资讯"
+    profile:
+      industry: "其他"
+      position: "其他"
+      expertise: []
+      experience_level: "mid"
+      company_size: "mid"
+      daily_time_minutes: 15
+    interests:
+      core_topics:
+        - {name: "科技", weight: 0.8}
+        - {name: "商业", weight: 0.8}
+        - {name: "社会", weight: 0.6}
+        - {name: "文化", weight: 0.5}
+      content_types: ["news", "analysis"]
+      source_preferences:
+        media: 0.8
+        community: 0.5
+        social: 0.6
+        academic: 0.3
+      language_preference: "zh_first"
+      content_depth: "medium"
+      novelty_preference: "balanced"
+    daily:
+      style: "brief"
+      columns:
+        - id: "headlines"
+          name: "🔥 今日头条"
+          enabled: true
+          max_items: 5
+          order: 1
+        - id: "tech"
+          name: "💻 科技"
+          enabled: true
+          max_items: 4
+          order: 2
+        - id: "business"
+          name: "💼 商业"
+          enabled: true
+          max_items: 3
+          order: 3
+        - id: "lifestyle"
+          name: "🌟 生活方式"
+          enabled: true
+          max_items: 3
+          order: 4
+      filter_rules:
+        min_quality_score: 55
+        time_window_hours: 24
+        dedup_level: "low"
+      summary:
+        method: "rule"
+        length: "short"
+        include_key_points: true
+
+# 行业映射
+industry_mapping:
+  "互联网/科技": tech_developer
+  "金融/投资": investor
+  "咨询/商业分析": business_analyst
+  "媒体/内容创作": general
+  "学术研究": general
+  "医疗健康": general
+  "制造业": general
+  "教育/培训": general
+  "其他": general
+
+# 职位映射
+position_mapping:
+  "技术开发者/工程师": tech_developer
+  "产品经理": product_manager
+  "设计师": designer
+  "创业者/高管": investor
+  "投资人/分析师": investor
+  "市场/运营": product_manager
+  "学生": general
+  "自由职业者": general
+  "其他": general

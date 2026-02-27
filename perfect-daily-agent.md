@@ -14,7 +14,8 @@
 6. [交互与反馈](#6-交互与反馈)
 7. [系统与工程能力](#7-系统与工程能力)
 8. [智能化能力](#8-智能化能力)
-9. [OpenClaw Skill 规范](#9-openclaw-skill-规范)
+9. [启动设置与交互式配置](#9-启动设置与交互式配置)
+10. [OpenClaw Skill 规范](#10-openclaw-skill-规范)
 
 ---
 
@@ -1340,7 +1341,482 @@ data/
 
 ---
 
-## 9. OpenClaw Skill 规范
+## 9. 启动设置与交互式配置
+
+提供友好的交互式向导，帮助用户快速完成初始配置，包括用户画像设置、兴趣偏好学习和日报内容定制。
+
+### 9.1 启动设置向导
+
+**启动命令：**
+
+```bash
+# 首次启动交互式设置
+$ python -m src.cli setup
+
+# 重新配置特定模块
+$ python -m src.cli setup --profile      # 仅用户画像
+$ python -m src.cli setup --interests    # 仅兴趣偏好
+$ python -m src.cli setup --daily        # 仅日报内容
+$ python -m src.cli setup --all          # 完整重新配置
+```
+
+**交互式启动流程：**
+
+```bash
+$ python -m src.cli setup
+
+🎉 欢迎使用 Daily Agent 个性化日报系统
+
+这是一个交互式设置向导，将帮助您完成初始配置。
+整个过程大约需要 3-5 分钟。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 设置步骤概览
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. 👤 用户画像设置 (约 1 分钟)
+  2. 🎯 兴趣偏好配置 (约 2 分钟)
+  3. 📰 日报内容定制 (约 1 分钟)
+  4. 🔗 推送渠道配置 (可选)
+
+按 Enter 开始设置...
+```
+
+### 9.2 用户画像交互式设置
+
+**设置流程：**
+
+```bash
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 步骤 1/4: 用户画像设置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+这些基础信息将帮助我为您筛选更相关的内容。
+
+📝 您当前从事的行业是？
+   [1] 互联网/科技
+   [2] 金融/投资
+   [3] 咨询/商业分析
+   [4] 媒体/内容创作
+   [5] 学术研究
+   [6] 医疗健康
+   [7] 制造业
+   [8] 教育/培训
+   [9] 其他
+
+请选择 [1-9]: 1
+
+📝 您的职位或角色是？
+   [1] 技术开发者/工程师
+   [2] 产品经理
+   [3] 创业者/高管
+   [4] 投资人/分析师
+   [5] 设计师
+   [6] 市场/运营
+   [7] 学生
+   [8] 自由职业者
+   [9] 其他
+
+请选择 [1-9]: 2
+
+📝 您的专业领域或技术栈是？（多选，空格分隔）
+   例如: AI 机器学习 Python 产品设计
+
+请输入: AI 大语言模型 产品设计 Python
+
+✅ 已记录专业领域: AI、大语言模型、产品设计、Python
+
+📝 您每天大约有多少时间阅读日报？
+   [1] 5-10 分钟（精简版）
+   [2] 15-20 分钟（标准版）
+   [3] 30 分钟以上（深度版）
+
+请选择 [1-3]: 2
+
+✅ 用户画像设置完成！
+```
+
+**用户画像数据结构：**
+
+```python
+{
+    "user_id": "default",
+    "profile": {
+        "industry": "互联网/科技",
+        "position": "产品经理",
+        "expertise": ["AI", "大语言模型", "产品设计", "Python"],
+        "experience_level": "senior",  # junior/mid/senior/expert
+        "company_size": "startup",     # startup/mid/enterprise
+        "location": "北京"             # 用于本地化内容
+    },
+    "reading_preferences": {
+        "daily_time_minutes": 20,
+        "preferred_time": "09:00",
+        "timezone": "Asia/Shanghai"
+    }
+}
+```
+
+### 9.3 兴趣偏好交互式配置
+
+**设置流程：**
+
+```bash
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 步骤 2/4: 兴趣偏好配置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+我将通过几个简单的问题了解您的兴趣偏好。
+您也可以直接选择预设模板。
+
+📝 选择配置方式：
+   [1] 🚀 快速配置 - 选择预设模板
+   [2] 🎨 自定义配置 - 详细设置每一项
+
+请选择 [1-2]: 1
+
+📝 选择预设模板：
+   [1] 👨‍💻 技术开发者 - 关注 AI、开源、编程语言
+   [2] 💼 产品经理 - 关注产品设计、用户增长、行业动态
+   [3] 💰 投资人 - 关注市场趋势、创业公司、财报数据
+   [4] 📊 商业分析师 - 关注行业研究、市场数据、竞争分析
+   [5] 🎨 设计师 - 关注设计趋势、创意灵感、设计工具
+   [6] 📰 综合资讯 - 平衡的科技、商业、社会资讯
+
+请选择 [1-6]: 2
+
+✅ 已选择模板: [产品经理]
+
+📋 模板包含以下兴趣标签：
+   核心兴趣: 产品设计、用户增长、用户体验、产品策略
+   关注行业: 互联网、SaaS、消费电子
+   关注话题: AI应用、商业模式、市场趋势
+
+📝 是否添加自定义兴趣标签？
+   输入标签（空格分隔），或直接按 Enter 跳过
+
+请输入: 数据分析 低代码平台
+
+✅ 已添加: 数据分析、低代码平台
+```
+
+**自定义配置流程：**
+
+```bash
+🎨 自定义兴趣配置
+
+📝 核心关注领域（最多选 5 个）：
+   [x] 人工智能/机器学习
+   [x] 大语言模型/AIGC
+   [ ] 区块链/Web3
+   [x] 云计算/云原生
+   [ ] 网络安全
+   [x] 移动互联网
+   [ ] 物联网/硬件
+   [ ] 生物科技
+   [ ] 新能源
+   [ ] 其他
+
+📝 感兴趣的内容类型：
+   [x] 行业新闻和动态
+   [x] 深度分析文章
+   [x] 技术教程/实践案例
+   [x] 产品发布和评测
+   [ ] 创业公司融资信息
+   [ ] 学术研究报告
+   [x] 观点/评论文章
+
+📝 偏好来源类型：
+   [x] 主流媒体（36氪、虎嗅等）
+   [x] 开发者社区（GitHub、Hacker News）
+   [x] 社交媒体（即刻、Twitter）
+   [ ] 学术论文/技术博客
+   [x] 视频/播客内容
+
+📝 内容语言偏好：
+   [1] 仅中文
+   [2] 仅英文
+   [3] 中英文混合（优先中文）
+   [4] 中英文混合（优先英文）
+
+请选择 [1-4]: 3
+```
+
+**兴趣偏好数据结构：**
+
+```python
+{
+    "interests": {
+        "core_topics": [
+            {"name": "产品设计", "weight": 1.0},
+            {"name": "用户增长", "weight": 0.9},
+            {"name": "AI应用", "weight": 0.9},
+            {"name": "数据分析", "weight": 0.8},
+            {"name": "低代码平台", "weight": 0.7}
+        ],
+        "content_types": ["news", "analysis", "tutorial", "product_review"],
+        "source_preferences": {
+            "media": 0.8,
+            "community": 0.9,
+            "social": 0.7,
+            "academic": 0.3
+        },
+        "language_preference": "zh_first",
+        "content_depth": "medium",  # light/medium/deep
+        "novelty_preference": "balanced"  # trending/balanced/timeless
+    }
+}
+```
+
+### 9.4 日报内容交互式定制
+
+**设置流程：**
+
+```bash
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📰 步骤 3/4: 日报内容定制
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+定制您的日报结构、分栏和内容筛选规则。
+
+📝 日报风格选择：
+   [1] 📰 新闻简报型 - 标题+摘要，快速浏览
+   [2] 📖 深度阅读型 - 详细摘要+关键要点
+   [3] 💬 对话简报型 - 聊天式摘要，适合移动端
+   [4] 📊 数据驱动型 - 图表+数据，适合分析师
+
+请选择 [1-4]: 2
+
+📝 日报分栏设置：
+
+   [x] 🔥 今日头条 - 重要科技/商业新闻
+       └─ 条数: [3]条（1-10）
+   
+   [x] 🤖 AI/技术 - AI进展、技术趋势
+       └─ 条数: [5]条（1-10）
+   
+   [x] 💰 商业/投资 - 融资、财报、市场动态
+       └─ 条数: [3]条（1-10）
+   
+   [x] 🛠️ 产品/工具 - 新产品、工具推荐
+       └─ 条数: [2]条（1-10）
+   
+   [ ] 📚 深度阅读 - 长文推荐
+       └─ 条数: [1]条（1-5）
+   
+   [ ] 💬 社区热议 - 社交媒体热门讨论
+       └─ 条数: [3]条（1-10）
+
+📝 内容筛选规则：
+
+   最低质量分数: [60]/100
+   （越高内容越精选，越低内容越丰富）
+
+   时间范围: [24]小时
+   （只采集最近 N 小时的内容）
+
+   去重敏感度: [中等]
+   [1] 宽松 - 保留相似内容
+   [2] 中等 - 平衡去重
+   [3] 严格 - 只保留独特内容
+
+📝 摘要生成设置：
+   [1] 规则摘要 - 快速、稳定
+   [2] LLM摘要 - 高质量、需要API Key
+
+请选择 [1-2]: 2
+
+⚠️ 未检测到 OPENAI_API_KEY，将使用规则摘要。
+   如需使用 LLM 摘要，请在 .env 中配置 API Key。
+```
+
+**日报配置数据结构：**
+
+```python
+{
+    "daily_report": {
+        "style": "detailed",  # brief/detailed/chat/data
+        "columns": [
+            {
+                "id": "headlines",
+                "name": "今日头条",
+                "enabled": True,
+                "max_items": 3,
+                "order": 1
+            },
+            {
+                "id": "ai_tech",
+                "name": "AI/技术",
+                "enabled": True,
+                "max_items": 5,
+                "order": 2
+            },
+            {
+                "id": "business",
+                "name": "商业/投资",
+                "enabled": True,
+                "max_items": 3,
+                "order": 3
+            },
+            {
+                "id": "products",
+                "name": "产品/工具",
+                "enabled": True,
+                "max_items": 2,
+                "order": 4
+            }
+        ],
+        "filter_rules": {
+            "min_quality_score": 60,
+            "time_window_hours": 24,
+            "dedup_level": "medium"  # low/medium/high
+        },
+        "summary": {
+            "method": "llm",  # rule/llm
+            "length": "medium",  # short/medium/long
+            "include_key_points": True
+        }
+    }
+}
+```
+
+### 9.5 配置模板库
+
+**预设模板：**
+
+```yaml
+# 模板: 技术开发者 (tech_developer)
+tech_developer:
+  name: "👨‍💻 技术开发者"
+  description: "专注技术趋势、开源项目、编程实践"
+  profile:
+    industry: "互联网/科技"
+    position: "技术开发者"
+    expertise: ["软件开发", "开源技术", "系统架构"]
+  interests:
+    core_topics:
+      - {name: "人工智能", weight: 1.0}
+      - {name: "大语言模型", weight: 0.95}
+      - {name: "开源项目", weight: 0.9}
+      - {name: "编程语言", weight: 0.85}
+      - {name: "云原生", weight: 0.8}
+    content_types: ["tutorial", "news", "analysis"]
+  daily:
+    style: "detailed"
+    columns:
+      - {id: "github", name: "🔥 GitHub 趋势", max_items: 5}
+      - {id: "ai_tech", name: "🤖 AI/技术", max_items: 5}
+      - {id: "dev_tools", name: "🛠️ 开发工具", max_items: 3}
+      - {id: "tech_news", name: "📰 科技新闻", max_items: 3}
+
+# 模板: 产品经理 (product_manager)
+product_manager:
+  name: "💼 产品经理"
+  description: "关注产品设计、用户增长、行业动态"
+  profile:
+    industry: "互联网/科技"
+    position: "产品经理"
+    expertise: ["产品设计", "用户研究", "数据分析"]
+  interests:
+    core_topics:
+      - {name: "产品设计", weight: 1.0}
+      - {name: "用户增长", weight: 0.9}
+      - {name: "用户体验", weight: 0.9}
+      - {name: "商业模式", weight: 0.8}
+      - {name: "AI应用", weight: 0.85}
+    content_types: ["analysis", "product_review", "news"]
+  daily:
+    style: "brief"
+    columns:
+      - {id: "headlines", name: "🔥 今日头条", max_items: 3}
+      - {id: "product_hunt", name: "🚀 Product Hunt", max_items: 5}
+      - {id: "ai_apps", name: "🤖 AI应用", max_items: 4}
+      - {id: "business", name: "💰 商业动态", max_items: 3}
+
+# 模板: 投资人 (investor)
+investor:
+  name: "💰 投资人"
+  description: "关注市场趋势、创业公司、财报数据"
+  profile:
+    industry: "金融/投资"
+    position: "投资人/分析师"
+    expertise: ["投资分析", "市场研究", "财务分析"]
+  interests:
+    core_topics:
+      - {name: "创业公司", weight: 1.0}
+      - {name: "投融资", weight: 0.95}
+      - {name: "市场趋势", weight: 0.9}
+      - {name: "财报分析", weight: 0.85}
+      - {name: "宏观经济", weight: 0.7}
+    content_types: ["news", "analysis"]
+  daily:
+    style: "data"
+    columns:
+      - {id: "market", name: "📈 市场动态", max_items: 5}
+      - {id: "funding", name: "💰 融资信息", max_items: 5}
+      - {id: "earnings", name: "📊 财报速递", max_items: 3}
+      - {id: "analysis", name: "🔍 深度分析", max_items: 3}
+
+# 模板: 综合资讯 (general)
+general:
+  name: "📰 综合资讯"
+  description: "平衡的科技、商业、社会资讯"
+  profile:
+    industry: "其他"
+    position: "其他"
+    expertise: []
+  interests:
+    core_topics:
+      - {name: "科技", weight: 0.8}
+      - {name: "商业", weight: 0.8}
+      - {name: "社会", weight: 0.6}
+      - {name: "文化", weight: 0.5}
+    content_types: ["news", "analysis"]
+  daily:
+    style: "brief"
+    columns:
+      - {id: "headlines", name: "🔥 今日头条", max_items: 5}
+      - {id: "tech", name: "💻 科技", max_items: 4}
+      - {id: "business", name: "💼 商业", max_items: 3}
+      - {id: "lifestyle", name: "🌟 生活方式", max_items: 3}
+```
+
+### 9.6 配置导入导出
+
+**导出配置：**
+
+```bash
+$ python -m src.cli setup export --format yaml --output my-config.yaml
+✅ 配置已导出到: my-config.yaml
+```
+
+**导入配置：**
+
+```bash
+$ python -m src.cli setup import my-config.yaml
+📋 检测到配置文件，包含以下设置：
+   - 用户画像: 产品经理
+   - 兴趣标签: 5 个
+   - 日报分栏: 4 个
+
+📝 是否覆盖现有配置? [y/N]: y
+✅ 配置导入成功
+```
+
+### 9.7 冷启动推荐策略
+
+对于新用户，系统提供多种冷启动方式：
+
+| 方式 | 描述 | 适用场景 |
+|------|------|----------|
+| **模板选择** | 选择预设模板快速开始 | 不确定具体偏好 |
+| **社交导入** | 从 Twitter/GitHub 导入关注 | 已有社交图谱 |
+| **阅读测试** | 展示10篇文章，根据反馈学习 | 希望精准定制 |
+| **手动配置** | 逐项详细设置 | 明确知道自己要什么 |
+| **热门推荐** | 先按热门内容推送，逐步学习 | 希望立即开始使用 |
+
+---
+
+## 10. OpenClaw Skill 规范
 
 ### 9.1 Skill 定义与结构
 
