@@ -305,7 +305,7 @@ class SetupWizard:
             border_style="green"
         ))
         
-        Prompt.ask("按 Enter 开始设置")
+        Prompt.ask("按 Enter 开始设置", default="")
     
     async def _setup_profile(self) -> dict:
         """设置用户画像"""
@@ -389,7 +389,8 @@ class SetupWizard:
         
         # 专业领域
         expertise_input = Prompt.ask(
-            "\n[bold]📝 您的专业领域或技术栈是？[/bold]（空格分隔，例如: AI Python 产品设计）"
+            "\n[bold]📝 您的专业领域或技术栈是？[/bold]（空格分隔，例如: AI Python 产品设计）",
+            default=""
         )
         config["expertise"] = [e.strip() for e in expertise_input.split() if e.strip()]
         
@@ -418,7 +419,8 @@ class SetupWizard:
         # 修改专业领域
         add_expertise = Prompt.ask(
             f"\n当前专业领域: {', '.join(config['expertise'])}\n"
-            "是否添加其他领域？（空格分隔，直接回车跳过）"
+            "是否添加其他领域？（空格分隔，直接回车跳过）",
+            default=""
         )
         if add_expertise:
             config["expertise"].extend([e.strip() for e in add_expertise.split() if e.strip()])
