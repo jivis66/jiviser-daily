@@ -434,61 +434,23 @@ def auth_add(source_name: str, username: str = None):
             border_style="blue"
         ))
         
-        # 获取输入 - 使用更可靠的方式处理多行粘贴
-        console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串，然后按 Enter:[/cyan]")
-        console.print("[dim](支持单行或多行粘贴，输入完成后按 Enter 两次结束)\n[/dim]")
+        # 获取输入 - 一次性读取所有粘贴内容
+        console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
+        console.print("[dim](粘贴后按 Enter，Windows 按 Ctrl+Z 然后 Enter，Mac/Linux 按 Ctrl+D 结束)\n[/dim]")
         
         import sys
-        lines = []
-        last_line_time = 0
-        
         try:
-            while True:
-                try:
-                    import time
-                    line = input("> ")
-                    
-                    # 检测是否已经有完整的 cURL 命令
-                    current_content = " ".join(lines)
-                    has_curl_prefix = current_content.strip().startswith("curl ")
-                    has_url = "http://" in current_content or "https://" in current_content
-                    looks_like_cookie = "=" in current_content and ";" in current_content and not has_curl_prefix
-                    
-                    # 如果输入为空行
-                    if not line.strip():
-                        # 如果还没有输入，提示用户
-                        if not lines:
-                            console.print("[yellow]⚠️ 输入为空，请粘贴 cURL 命令[/yellow]")
-                            continue
-                        
-                        # 如果是 cURL 命令（有 curl 前缀和 URL），一个空行就结束
-                        if has_curl_prefix and has_url:
-                            break
-                        
-                        # 如果是纯 cookie 字符串，需要两个空行确认
-                        if looks_like_cookie:
-                            # 检查上一行是否也是空行
-                            if len(lines) > 0 and not lines[-1].strip():
-                                # 移除最后一个空行
-                                lines = lines[:-1]
-                                break
-                        
-                        # 其他情况，添加空行到内容中（可能是有意为之的空行）
-                        lines.append(line)
-                    else:
-                        lines.append(line)
-                        
-                except EOFError:
-                    # Ctrl+D 或粘贴结束
-                    break
+            # 读取所有输入直到 EOF
+            console.print("[dim]等待输入...[/dim]")
+            data = sys.stdin.read()
+            curl_command = data.strip()
         except KeyboardInterrupt:
             console.print("\n[yellow]已取消[/yellow]")
             return
         
-        curl_command = "\n".join(lines).strip()
-        
-        # 清理可能的尾部反斜杠（多行 cURL 续行符）
+        # 清理多行 cURL 的续行符
         curl_command = curl_command.replace("\\\n", " ").replace("\\\r\n", " ")
+        curl_command = curl_command.replace("\n", " ")  # 将换行转为空格
         
         if not curl_command:
             console.print("[red]输入为空，取消配置[/red]")
