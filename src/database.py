@@ -145,19 +145,47 @@ class UserFeedbackDB(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class AuthCredentialDB(Base):
+    """认证凭证表 - 存储需要登录的渠道的认证信息"""
+    __tablename__ = "auth_credentials"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True, unique=True)
+    auth_type: Mapped[str] = mapped_column(String(50), nullable=False)  # cookie/token/oauth
+    
+    # 加密存储的凭证数据
+    credentials: Mapped[str] = mapped_column(Text, nullable=False)
+    headers: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
+    
+    # 元数据
+    username: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    
+    # 时间戳
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_verified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # 状态
+    is_valid: Mapped[bool] = mapped_column(default=True)
+    invalid_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    
+    # 额外配置
+    config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
+
+
 # 数据库引擎和会话工厂
 _engine = None
 _async_session_maker = None
 
 
 def get_database_url() -> str:
-    """获取异步数据库URL"""
+    """获取异步数据库URL（仅支持 SQLite）"""
     url = settings.database_url
     # 转换 SQLite URL 为异步版本
     if url.startswith("sqlite:///"):
         url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://")
     return url
 
 
@@ -318,6 +346,94 @@ class DailyReportRepository:
         self.session.add(report_item)
         await self.session.flush()
         return report_item
+
+
+class AuthCredentialRepository:
+    """认证凭证仓库"""
+    
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create_or_update(self, credential: AuthCredentialDB) -> AuthCredentialDB:
+        """创建或更新认证凭证"""
+        # 检查是否已存在
+        existing = await self.get_by_source(credential.source_name)
+        if existing:
+            # 更新现有记录
+            existing.auth_type = credential.auth_type
+            existing.credentials = credential.credentials
+            existing.headers = credential.headers
+            existing.username = credential.username
+            existing.user_id = credential.user_id
+            existing.expires_at = credential.expires_at
+            existing.is_valid = True
+            existing.invalid_reason = None
+            existing.updated_at = datetime.utcnow()
+            await self.session.flush()
+            return existing
+        else:
+            # 创建新记录
+            self.session.add(credential)
+            await self.session.flush()
+            return credential
+    
+    async def get_by_source(self, source_name: str) -> Optional[AuthCredentialDB]:
+        """根据来源名称获取认证凭证"""
+        result = await self.session.execute(
+            select(AuthCredentialDB).where(AuthCredentialDB.source_name == source_name)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_all_valid(self) -> List[AuthCredentialDB]:
+        """获取所有有效的认证凭证"""
+        result = await self.session.execute(
+            select(AuthCredentialDB).where(
+                AuthCredentialDB.is_valid == True
+            ).order_by(AuthCredentialDB.source_name)
+        )
+        return result.scalars().all()
+    
+    async def get_all(self) -> List[AuthCredentialDB]:
+        """获取所有认证凭证"""
+        result = await self.session.execute(
+            select(AuthCredentialDB).order_by(AuthCredentialDB.source_name)
+        )
+        return result.scalars().all()
+    
+    async def get_expiring_soon(self, hours: int = 72) -> List[AuthCredentialDB]:
+        """获取即将过期的认证凭证"""
+        threshold = datetime.utcnow() + timedelta(hours=hours)
+        result = await self.session.execute(
+            select(AuthCredentialDB).where(
+                AuthCredentialDB.is_valid == True,
+                AuthCredentialDB.expires_at <= threshold
+            ).order_by(AuthCredentialDB.expires_at)
+        )
+        return result.scalars().all()
+    
+    async def mark_invalid(self, source_name: str, reason: str = None):
+        """标记认证凭证为无效"""
+        credential = await self.get_by_source(source_name)
+        if credential:
+            credential.is_valid = False
+            credential.invalid_reason = reason
+            await self.session.flush()
+    
+    async def update_last_verified(self, source_name: str):
+        """更新最后验证时间"""
+        credential = await self.get_by_source(source_name)
+        if credential:
+            credential.last_verified = datetime.utcnow()
+            await self.session.flush()
+    
+    async def delete(self, source_name: str) -> bool:
+        """删除认证凭证"""
+        credential = await self.get_by_source(source_name)
+        if credential:
+            await self.session.delete(credential)
+            await self.session.flush()
+            return True
+        return False
 
 
 # JSON 辅助函数

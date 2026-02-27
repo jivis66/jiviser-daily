@@ -1,0 +1,374 @@
+# 国内外 Top 30 信息渠道采集器配置示例
+# 复制此文件为 sources.yaml 并根据需要修改
+
+# ============================================
+# 🇨🇳 国内信息源配置
+# ============================================
+
+# 文字/图文媒体
+china_media:
+  # 财新网 - 深度调查报道
+  caixin:
+    enabled: true
+    collector: CaixinCollector
+    config:
+      category: "经济"  # 可选: 首页, 经济, 金融, 公司, 政经, 世界, 科技, 文化
+      limit: 10
+      # require_auth: true  # 如需获取付费内容
+      # auth_cookie: "your_cookie_here"
+    weight: 1.0
+    filter:
+      keywords: ["经济", "金融", "科技"]
+
+  # 第一财经 - 财经视频+图文
+  yicai:
+    enabled: true
+    collector: YicaiCollector
+    config:
+      category: "最新"  # 可选: 最新, 要闻, 宏观, 股市, 金融, 公司, 产业, 科技
+      limit: 10
+    weight: 0.9
+
+  # 界面新闻 - 商业人物报道
+  jiemian:
+    enabled: true
+    collector: JiemianCollector
+    config:
+      category: "商业"  # 可选: 首页, 科技, 财经, 商业, 消费, 工业等
+      limit: 10
+    weight: 0.9
+
+  # FT中文网 - 国际视野
+  ftchinese:
+    enabled: true
+    collector: FTChineseCollector
+    config:
+      category: "首页"  # 可选: 首页, 今日焦点, 每日英语, 专栏, 热点观察等
+      limit: 10
+    weight: 0.8
+
+# 播客/音频平台
+china_podcasts:
+  # 小宇宙 - 中文播客头部平台
+  xiaoyuzhou:
+    enabled: true
+    collector: XiaoyuzhouCollector
+    config:
+      collect_type: "popular"  # 可选: popular, trending, search
+      # podcast_id: "your_podcast_id"  # 指定播客节目ID
+      # keyword: "科技"  # 搜索关键词
+      limit: 10
+    weight: 0.7
+
+  # 喜马拉雅 - 综合音频平台
+  ximalaya:
+    enabled: true
+    collector: XimalayaCollector
+    config:
+      collect_type: "hot"
+      # album_id: "your_album_id"
+      # keyword: "财经"
+      limit: 10
+    weight: 0.7
+
+  # 网易云音乐播客
+  netease_podcast:
+    enabled: false  # 需要 radio_id
+    collector: NeteasePodcastCollector
+    config:
+      radio_id: "your_radio_id"
+      limit: 10
+    weight: 0.6
+
+  # 苹果播客(中国区)
+  apple_podcast_cn:
+    enabled: false  # 需要 RSS feed_url
+    collector: ApplePodcastCNCollector
+    config:
+      feed_url: "https://feeds.example.com/podcast.xml"
+      podcast_name: "播客名称"
+      limit: 10
+    weight: 0.6
+
+# 视频平台
+china_video:
+  # B站 - 知识区长视频
+  bilibili:
+    enabled: true
+    collector: BilibiliCollector
+    config:
+      collect_type: "popular"  # 可选: popular, mid, search
+      # mid: 123456  # UP主ID
+      # keyword: "科技"
+      limit: 10
+    weight: 0.8
+
+  # 抖音 - 泛知识内容
+  douyin:
+    enabled: false  # 反爬严格，需要 ms_token
+    collector: DouyinCollector
+    config:
+      category: "search"  # 可选: hot, search, user
+      keyword: "知识科普"
+      # user_id: "user_sec_id"
+      # ms_token: "your_ms_token"
+      limit: 10
+    weight: 0.6
+
+  # 小红书 - 生活方式/职场经验
+  xiaohongshu:
+    enabled: true
+    collector: XiaohongshuCollector
+    config:
+      collect_type: "hot"  # 可选: hot, search
+      # keyword: "职场"
+      limit: 10
+    weight: 0.7
+
+  # 视频号 - 微信生态
+  wechat_channels:
+    enabled: false  # 采集困难，建议通过 RSS
+    collector: WechatChannelsCollector
+    config:
+      # channel_id: "your_channel_id"
+      feed_url: "https://rsshub.app/wechat/mp/公众号ID"  # 替代方案
+      limit: 10
+    weight: 0.5
+
+# 社区/数据
+china_community:
+  # 知乎 - 专业问答
+  zhihu:
+    enabled: true
+    collector: ZhihuHotCollector
+    config:
+      collect_type: "hot"  # 可选: hot, recommend, search, column, topic
+      # keyword: "人工智能"
+      # column_id: "your_column_id"
+      # cookie: "your_cookie"  # 推荐登录获取更好内容
+      limit: 10
+    weight: 0.9
+
+  # 即刻 - 兴趣圈子
+  jike:
+    enabled: false  # 需要 token
+    collector: JikeCollector
+    config:
+      collect_type: "topic"  # 可选: topic, user, recommend
+      topic_id: "your_topic_id"
+      # username: "your_username"
+      # token: "your_token"
+      limit: 10
+    weight: 0.7
+
+  # Wind 金融终端
+  wind:
+    enabled: false  # 需要付费账号
+    collector: WindCollector
+    config:
+      data_type: "news"  # 可选: news, announcement, research
+      symbols: ["000001.SZ", "000002.SZ"]  # 股票代码
+      limit: 50
+      # wind_account: "your_account"
+      # wind_password: "your_password"
+      # auto_login: false
+    weight: 1.0
+
+  # 同花顺
+  tonghuashun:
+    enabled: false  # 需要 iFinD API
+    collector: TonghuashunCollector
+    config:
+      data_type: "news"
+      symbols: ["000001", "000002"]
+      limit: 50
+      # ifind_username: "your_username"
+      # ifind_password: "your_password"
+    weight: 0.9
+
+# ============================================
+# 🌍 国际信息源配置
+# ============================================
+
+# 文字媒体
+intl_news:
+  # Bloomberg - 金融从业者标配
+  bloomberg:
+    enabled: true
+    collector: BloombergCollector
+    config:
+      category: "top"  # 可选: top, markets, technology, politics, economy, business
+      limit: 10
+      # api_key: "your_api_key"  # 可选
+    weight: 1.0
+
+  # Reuters - 全球新闻网络
+  reuters:
+    enabled: true
+    collector: ReutersCollector
+    config:
+      category: "top"  # 可选: top, business, markets, world, politics, tech
+      limit: 10
+    weight: 0.95
+
+  # The Economist - 深度分析
+  economist:
+    enabled: true
+    collector: EconomistCollector
+    config:
+      category: "top"  # 可选: top, leaders, briefing, business, finance, science, international
+      limit: 10
+    weight: 0.9
+
+  # The New York Times
+  nyt:
+    enabled: false  # 需要 API Key 获取完整内容
+    collector: NYTCollector
+    config:
+      category: "home"  # 可选: home, world, us, business, tech, science, health
+      # api_key: "your_nyt_api_key"
+      use_rss: true  # 使用 RSS 作为备选
+      limit: 10
+    weight: 0.9
+
+# 播客/视频平台
+intl_podcast_video:
+  # Spotify 播客
+  spotify_podcast:
+    enabled: false  # 需要 RSS feed_url 或 Spotify API
+    collector: SpotifyPodcastCollector
+    config:
+      feed_url: "https://feeds.example.com/spotify-podcast.xml"
+      # client_id: "your_client_id"
+      # client_secret: "your_client_secret"
+      # show_id: "your_show_id"
+      limit: 10
+    weight: 0.7
+
+  # YouTube 视频/播客
+  youtube:
+    enabled: false  # 需要 API Key
+    collector: YouTubePodcastCollector
+    config:
+      content_type: "podcast"  # 可选: podcast, video
+      # channel_id: "UCxxxxxxxx"
+      # playlist_id: "PLxxxxxxxx"
+      # keyword: "科技"
+      feed_url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxxxxxxxx"
+      api_key: "your_youtube_api_key"
+      limit: 10
+    weight: 0.8
+
+  # TED 演讲
+  ted:
+    enabled: true
+    collector: TEDCollector
+    config:
+      category: "top"  # 可选: top, business, technology, science, global, design
+      limit: 10
+    weight: 0.8
+
+  # Netflix 教育内容
+  netflix_edu:
+    enabled: false  # 需要第三方 API
+    collector: NetflixEducationalCollector
+    config:
+      content_type: "documentary"
+      limit: 10
+    weight: 0.5
+
+  # MasterClass
+  masterclass:
+    enabled: false  # 无公开 API
+    collector: MasterClassCollector
+    config:
+      category: ""
+      limit: 10
+    weight: 0.5
+
+# 在线教育平台
+online_education:
+  # Coursera
+  coursera:
+    enabled: true
+    collector: OnlineCourseCollector
+    config:
+      platform: "coursera"
+      category: "computer-science"  # 课程类别
+      limit: 10
+    weight: 0.6
+
+  # Udemy
+  udemy:
+    enabled: false  # 需要 API Key
+    collector: OnlineCourseCollector
+    config:
+      platform: "udemy"
+      category: "development"
+      keyword: "python"
+      api_key: "your_udemy_api_key"
+      limit: 10
+    weight: 0.6
+
+  # Skillshare
+  skillshare:
+    enabled: false  # 无公开 API
+    collector: OnlineCourseCollector
+    config:
+      platform: "skillshare"
+      category: "design"
+      limit: 10
+    weight: 0.5
+
+# ============================================
+# 分栏配置示例
+# ============================================
+columns:
+  - id: "headlines"
+    name: "🔥 今日头条"
+    sources:
+      - caixin
+      - yicai
+      - bloomberg
+      - reuters
+    max_items: 5
+
+  - id: "tech"
+    name: "💻 科技前沿"
+    sources:
+      - bilibili
+      - zhihu
+      - yicai  # 科技栏目
+    max_items: 8
+
+  - id: "business"
+    name: "📈 商业动态"
+    sources:
+      - caixin
+      - jiemian
+      - ftchinese
+      - economist
+    max_items: 5
+
+  - id: "podcasts"
+    name: "🎧 播客精选"
+    sources:
+      - xiaoyuzhou
+      - ximalaya
+      - ted
+    max_items: 5
+
+  - id: "video"
+    name: "📺 视频精选"
+    sources:
+      - bilibili
+      - yicai_video
+    max_items: 5
+
+  - id: "deep_dive"
+    name: "📚 深度阅读"
+    sources:
+      - caixin
+      - economist
+    max_items: 3
+    schedule: "weekly"
