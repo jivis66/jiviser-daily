@@ -13,7 +13,10 @@
 git clone https://github.com/uhajivis-cell/openclaw-skills-daily.git
 cd openclaw-skills-daily
 
-# 2. 选择启动方式
+# 2. 运行诊断，确保环境就绪
+python -m src.cli doctor
+
+# 3. 选择启动方式
 
 # 方式 A: Fast 模式（零配置，推荐首次体验）
 STARTUP_MODE=fast docker-compose up -d
@@ -23,10 +26,10 @@ SETUP_TEMPLATE=tech_developer docker-compose up -d
 
 # 方式 C: 先本地配置，再挂载到容器（推荐日常使用）
 # 先在本地运行配置向导，然后启动容器
-python -m src.cli setup wizard  # 完成配置
+python -m src.cli setup wizard  # 完成配置（支持智能模板推荐）
 docker-compose up -d            # 启动容器（配置自动挂载）
 
-# 3. 查看日志
+# 4. 查看日志
 docker-compose logs -f
 ```
 
@@ -221,6 +224,41 @@ python -m src.cli config export --output my-config.yaml
 python -m src.cli config import my-config.yaml
 ```
 
+### 诊断与测试
+
+```bash
+# 一键诊断系统状态
+python -m src.cli doctor
+
+# 自动修复发现的问题
+python -m src.cli fix
+
+# 预览今日日报（不保存）
+python -m src.cli preview
+
+# 测试单个数据源
+python -m src.cli test source "Hacker News"
+
+# 测试推送渠道
+python -m src.cli test channel telegram
+
+# 测试 LLM 连接
+python -m src.cli test llm
+```
+
+### 配置管理
+
+```bash
+# 查看所有数据源
+python -m src.cli config sources
+
+# 编辑配置文件
+python -m src.cli config edit
+
+# 验证配置
+python -m src.cli config validate
+```
+
 ### 重新配置
 
 ```bash
@@ -239,7 +277,7 @@ python -m src.cli setup --module channels     # 推送渠道
 
 ## 🔧 配置模板
 
-系统内置 7 种预设模板，覆盖主流用户场景：
+系统内置 12 种预设模板，覆盖主流用户场景，支持**智能推荐**：
 
 | 模板 ID | 名称 | 适合人群 | 核心关注 |
 |---------|------|----------|----------|
@@ -248,10 +286,22 @@ python -m src.cli setup --module channels     # 推送渠道
 | `investor` | 💰 投资人 | VC、PE、分析师 | 市场、融资、财报 |
 | `business_analyst` | 📊 商业分析师 | 咨询、战略 | 行业研究、数据 |
 | `designer` | 🎨 设计师 | UI/UX、创意 | 趋势、工具、灵感 |
+| `ai_researcher` | 🧠 AI 研究员 | ML工程师、学者 | 论文、大模型、前沿 |
+| `frontend_dev` | 🌐 前端开发者 | 前端工程师 | React/Vue、UI组件 |
+| `backend_dev` | ⚙️ 后端开发者 | 后端工程师 | 架构、数据库、分布式 |
+| `data_engineer` | 📈 数据工程师 | 数据工程师 | ETL、数据仓库、BI |
+| `security_engineer` | 🔒 安全工程师 | 安全工程师 | 攻防、合规、隐私 |
+| `entrepreneur` | 🚀 创业者 | 创始人、CEO | 融资、管理、增长 |
 | `general` | 📰 综合资讯 | 大众用户 | 平衡资讯 |
-| `minimal` | ⚡ 极简模式 | 时间有限 | 仅头条+摘要 |
 
-使用模板启动：
+**🎯 智能推荐**：配置向导会根据你的兴趣自动推荐最合适的模板
+```bash
+python -m src.cli setup wizard
+# 输入关键词如：AI 编程 创业
+# 系统将自动推荐匹配度最高的模板
+```
+
+使用指定模板启动：
 ```bash
 python -m src.cli setup --template tech_developer
 ```
@@ -415,6 +465,61 @@ python -m src.cli auth remove xiaohongshu
 
 # 查看认证配置指南
 python -m src.cli auth guide
+```
+
+---
+
+## 🖥️ Web 界面
+
+Daily Agent 提供友好的 Web 界面，无需命令行即可完成配置和管理。
+
+### 配置向导
+
+访问 `http://localhost:8080/setup`
+
+**功能**:
+- 🎯 智能模板推荐（输入关键词自动推荐）
+- 👤 可视化用户画像配置
+- 🤖 LLM 配置
+- 📤 推送渠道设置
+
+### 监控面板
+
+访问 `http://localhost:8080/dashboard`
+
+**功能**:
+- 📊 实时统计（今日采集/本周日报/数据源状态）
+- 📡 数据源健康监控
+- 📰 最近日报列表
+- 🔄 30秒自动刷新
+
+### 日报管理
+
+```bash
+# 列出历史日报
+python -m src.cli reports list
+
+# 查看日报详情
+python -m src.cli reports view <report_id>
+
+# 对比两份日报
+python -m src.cli reports diff <id1> <id2>
+
+# 导出日报
+python -m src.cli reports export <report_id> --output report.md
+
+# 性能统计
+python -m src.cli reports stats
+```
+
+### 规则测试
+
+```bash
+# 测试分栏过滤规则
+python -m src.cli test rules --column headlines
+
+# 测试数据源过滤规则
+python -m src.cli test rules --source "TechCrunch"
 ```
 
 ---

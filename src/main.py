@@ -30,7 +30,11 @@ from src.output.formatter import ChatFormatter, MarkdownFormatter
 from src.output.publisher import Publisher, PushResult
 from src.personalization.profile import ProfileManager
 from src.scheduler import DailyTaskManager, get_scheduler
+from src.scheduler_manager import get_scheduler_manager
 from src.service import DailyAgentService
+from src.web_setup import router as setup_router
+from src.web_scheduler import router as scheduler_router
+from src.web_content import router as content_router
 
 settings = get_settings()
 
@@ -64,6 +68,13 @@ async def lifespan(app: FastAPI):
     )
     daily_manager.start()
     
+    # 初始化定时任务管理器（用于 Web 管理）
+    scheduler_manager = get_scheduler_manager()
+    scheduler_manager.setup(
+        generate_func=_service.generate_daily_report,
+        push_func=_service.push_report
+    )
+    
     print(f"[Startup] {settings.app_name} 启动完成")
     
     yield
@@ -81,6 +92,11 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# 注册 Web 界面路由
+app.include_router(setup_router)
+app.include_router(scheduler_router)
+app.include_router(content_router)
 
 
 # 依赖注入

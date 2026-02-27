@@ -283,11 +283,19 @@ print(f"采集到 {len(result.items)} 条内容")
 项目提供丰富的命令行工具：
 
 ```bash
+# 系统诊断（新增）
+python -m src.cli doctor             # 运行全面系统诊断
+python -m src.cli doctor --fix       # 诊断并自动修复
+python -m src.cli fix                # 自动修复系统问题
+
 # 生成日报
 python -m src.cli generate --user default
 
 # 指定日期生成
 python -m src.cli generate --user default --date 2024-01-15
+
+# 预览日报（新增）- 不保存，用于调试
+python -m src.cli preview
 
 # 推送日报
 python -m src.cli push <report_id> --channel telegram --channel slack
@@ -297,6 +305,17 @@ python -m src.cli collect
 
 # 验证配置
 python -m src.cli verify
+
+# 配置管理增强（新增）
+python -m src.cli config sources            # 列出所有数据源
+python -m src.cli config edit               # 编辑 columns.yaml
+python -m src.cli config edit --file env    # 编辑 .env
+python -m src.cli config validate           # 验证配置有效性
+
+# 测试工具（新增）
+python -m src.cli test source <name>        # 测试单个数据源
+python -m src.cli test channel <name>       # 测试推送渠道
+python -m src.cli test llm                  # 测试 LLM 连接
 
 # 初始化数据库
 python -m src.cli init
@@ -316,19 +335,31 @@ python -m src.cli llm test           # 测试 LLM 连接
 python -m src.cli llm status         # 查看 LLM 配置状态
 python -m src.cli llm switch         # 切换 LLM 模型
 
-# 设置向导
+# 设置向导（增强 - 支持智能推荐）
 python -m src.cli quickstart         # 快速开始（完整设置向导）
-python -m src.cli setup templates    # 查看可用配置模板
-python -m src.cli setup wizard       # 运行完整设置向导
+python -m src.cli setup templates    # 查看可用配置模板（12个模板）
+python -m src.cli setup wizard       # 运行完整设置向导（含智能推荐）
 python -m src.cli setup export       # 导出用户配置
 python -m src.cli setup import       # 导入用户配置
 ```
+
+## Web 界面
+
+| 路径 | 说明 |
+|------|------|
+| `/setup` | 可视化配置向导（智能模板推荐） |
+| `/dashboard` | 监控面板（实时统计、数据源状态） |
 
 ## API 端点
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
 | `/health` | GET | 健康检查 |
+| `/setup` | GET | Web 配置向导页面 |
+| `/dashboard` | GET | 监控面板页面 |
+| `/api/v1/setup/recommend` | POST | 获取模板推荐 |
+| `/api/v1/setup/save` | POST | 保存配置 |
+| `/api/v1/dashboard/stats` | GET | Dashboard 统计数据 |
 | `/api/v1/reports/generate` | POST | 生成日报 |
 | `/api/v1/reports/{id}` | GET | 获取日报（支持 format=markdown/json） |
 | `/api/v1/reports` | GET | 获取日报列表 |
