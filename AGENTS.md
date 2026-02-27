@@ -2,21 +2,22 @@
 
 ## 项目概述
 
-**Daily Agent** 是一个智能个性化日报信息收集系统，基于 [perfect-daily-agent.md](perfect-daily-agent.md) 能力图谱实现。该系统能够自动从多种数据源采集信息，通过 LLM 进行智能处理和摘要生成，根据用户画像进行个性化筛选和排序，最终输出多格式的日报内容。
+**Daily Agent** 是一个智能个性化日报信息收集系统，能够自动从多种数据源采集信息，通过 LLM 进行智能处理和摘要生成，根据用户画像进行个性化筛选和排序，最终输出多格式的日报内容。
 
 **项目名称**: openclaw-skills-daily  
 **项目语言**: 简体中文（代码注释和文档）  
-**技术栈**: Python 3.11+ / FastAPI / SQLAlchemy  
+**技术栈**: Python 3.11+ / FastAPI / SQLAlchemy 2.0 (异步)  
 **许可证**: MIT License
 
 ### 核心功能
 
-- **多源采集**: RSS、API、社交媒体（B站、小红书、知乎等）、新闻媒体、播客
-- **智能处理**: 内容清洗、关键词提取、主题分类、LLM 摘要生成
+- **多源采集**: RSS、API、社交媒体（B站、小红书、知乎、即刻等）、新闻媒体、播客平台
+- **智能处理**: 内容清洗、关键词提取、主题分类、LLM 摘要生成（支持抽取式和生成式）
 - **智能筛选**: 语义去重、多维度质量评分、个性化排序、多样性保证
 - **多格式输出**: Markdown / HTML / JSON / Telegram / Slack / Discord / 邮件
-- **个性化**: 用户画像构建、兴趣偏好学习、反馈驱动的持续优化
-- **任务调度**: 支持定时生成和推送日报
+- **个性化**: 用户画像构建、兴趣偏好学习、反馈驱动的持续优化、预设配置模板
+- **任务调度**: 支持定时生成和推送日报（基于 APScheduler）
+- **认证管理**: 支持需要登录的渠道（即刻、小红书、知乎等），提供交互式 Cookie 配置
 
 ## 技术栈
 
@@ -30,7 +31,7 @@
 | **NLP/文本** | jieba, scikit-learn 1.3, markdown, markdownify |
 | **配置管理** | python-dotenv, PyYAML, ruamel.yaml |
 | **CLI/UI** | Click 8.1, Rich 13.7 |
-| **安全** | cryptography 41.0 |
+| **安全** | cryptography 41.0 (Fernet 加密) |
 | **测试** | pytest 7.4, pytest-asyncio |
 
 ## 项目结构
@@ -39,10 +40,10 @@
 .
 ├── src/                          # 源代码目录
 │   ├── collector/                # 采集模块
-│   │   ├── base.py               # 采集器基类和管理器
-│   │   ├── base_auth_collector.py # 带认证的采集器基类
+│   │   ├── base.py               # 采集器基类和管理器 (BaseCollector, CollectorManager)
+│   │   ├── base_auth_collector.py # 带认证的采集器基类 (AuthenticatedCollector)
 │   │   ├── rss_collector.py      # RSS 采集器
-│   │   ├── api_collector.py      # API 采集器（HN、GitHub 等）
+│   │   ├── api_collector.py      # API 采集器（HackerNews, GitHub Trending）
 │   │   ├── bilibili_collector.py # B站采集器
 │   │   ├── xiaohongshu_collector.py # 小红书采集器
 │   │   ├── zhihu_collector.py    # 知乎采集器
@@ -53,38 +54,38 @@
 │   │   └── ...                   # 其他平台采集器
 │   ├── processor/                # 内容处理模块
 │   │   ├── cleaner.py            # 内容清洗（HTML 净化）
-│   │   ├── extractor.py          # 信息提取（关键词、主题分类）
-│   │   └── summarizer.py         # 摘要生成（抽取式/生成式）
+│   │   ├── extractor.py          # 信息提取（关键词、实体、主题分类）
+│   │   └── summarizer.py         # 摘要生成（ExtractiveSummarizer / LLMSummarizer）
 │   ├── filter/                   # 筛选排序模块
 │   │   ├── deduper.py            # 去重算法（语义/精确）
-│   │   ├── ranker.py             # 排序算法
-│   │   └── selector.py           # 内容选择器
+│   │   ├── ranker.py             # 排序算法（质量评分、个性化排序）
+│   │   └── selector.py           # 内容选择器 (ContentSelector)
 │   ├── output/                   # 输出模块
-│   │   ├── formatter.py          # 格式转换（Markdown/HTML）
+│   │   ├── formatter.py          # 格式转换（Markdown/HTML/Chat）
 │   │   └── publisher.py          # 推送发布（Telegram/Slack/Discord/邮件）
 │   ├── personalization/          # 个性化模块
-│   │   ├── profile.py            # 用户画像管理
+│   │   ├── profile.py            # 用户画像管理 (ProfileManager)
 │   │   └── learning.py           # 学习算法（反馈处理）
 │   ├── main.py                   # FastAPI 应用入口
-│   ├── service.py                # 核心业务服务（采集-处理-生成-推送流程）
+│   ├── service.py                # 核心业务服务 (DailyAgentService)
 │   ├── models.py                 # Pydantic 数据模型
 │   ├── database.py               # SQLAlchemy 数据库模型和仓库
 │   ├── config.py                 # 配置管理（环境变量 + YAML）
-│   ├── scheduler.py              # 任务调度器（APScheduler 封装）
-│   ├── cli.py                    # 命令行工具
+│   ├── scheduler.py              # 任务调度器 (TaskScheduler, DailyTaskManager)
+│   ├── cli.py                    # 命令行工具 (Click)
 │   ├── auth_manager.py           # 认证管理（Cookie/Token 加密存储）
 │   ├── llm_config.py             # LLM 配置管理
 │   └── setup_wizard.py           # 交互式设置向导
 ├── config/                       # 配置文件目录
 │   ├── columns.yaml              # 日报分栏配置
-│   ├── templates.yaml            # 用户画像模板
+│   ├── templates.yaml            # 用户画像模板（技术开发者/产品经理/投资人等）
 │   └── sources_example.yaml      # 数据源配置示例
 ├── tests/                        # 测试目录
 │   ├── test_collector.py         # 采集器测试
 │   └── test_processor.py         # 处理器测试
-├── data/                         # 数据目录（SQLite 数据库、缓存）
+├── data/                         # 数据目录（SQLite 数据库、缓存、导出文件）
 ├── docker-compose.yml            # Docker Compose 配置
-├── Dockerfile                    # Docker 镜像构建
+├── Dockerfile                    # Docker 镜像构建（Python 3.11-slim）
 ├── requirements.txt              # Python 依赖
 ├── start.sh                      # 启动脚本
 ├── .env.example                  # 环境变量示例
@@ -165,7 +166,7 @@ pytest --cov=src --cov-report=html
 ### 测试配置
 
 测试配置位于 `pytest.ini`：
-- 使用 `pytest-asyncio` 支持异步测试
+- 使用 `pytest-asyncio` 支持异步测试（asyncio_mode = auto）
 - 测试文件命名规则: `test_*.py`
 - 测试类命名规则: `Test*`
 - 测试函数命名规则: `test_*`
@@ -182,14 +183,17 @@ pytest --cov=src --cov-report=html
 | `HOST` / `PORT` | 服务监听地址/端口 | 0.0.0.0 / 8080 |
 | `DATABASE_URL` | SQLite 数据库路径 | sqlite:///data/daily.db |
 | `OPENAI_API_KEY` | OpenAI API 密钥 | - |
-| `OPENAI_BASE_URL` | 自定义 API 地址（可选） | - |
+| `OPENAI_BASE_URL` | 自定义 API 地址（可选，支持 OpenRouter/Ollama/Azure） | - |
 | `OPENAI_MODEL` | 默认模型 | gpt-4o-mini |
 | `MAX_CONCURRENT_COLLECTORS` | 并发采集数 | 5 |
 | `REQUEST_DELAY` | 请求间隔（秒） | 1.0 |
+| `CONTENT_RETENTION_DAYS` | 内容保留天数 | 30 |
 | `DEFAULT_PUSH_TIME` | 默认推送时间 | 09:00 |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Telegram 配置 | - |
 | `SLACK_BOT_TOKEN` / `SLACK_CHANNEL` | Slack 配置 | - |
-| `API_SECRET_KEY` | API 安全密钥 | change-this-secret-key |
+| `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` | Discord 配置 | - |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | 邮件配置 | - |
+| `API_SECRET_KEY` | API 安全密钥（用于加密认证凭证） | change-this-secret-key |
 
 ### 分栏配置 (config/columns.yaml)
 
@@ -210,10 +214,11 @@ columns:
         weight: 1.0
         filter:
           keywords: ["AI", "人工智能"]
+          exclude: ["广告"]
     organization:
-      sort_by: "relevance"
-      dedup_strategy: "semantic"
-      summarize: "3_points"
+      sort_by: "relevance"      # relevance/time/mixed
+      dedup_strategy: "semantic" # semantic/exact/none
+      summarize: "3_points"     # 1_sentence/3_points/paragraph/none
 ```
 
 配置支持热更新：通过 API `POST /api/v1/reload` 重新加载配置，无需重启服务。
@@ -243,17 +248,22 @@ python -m src.cli init
 
 # 认证管理（配置需要登录的渠道）
 python -m src.cli auth list          # 列出已配置的认证
-python -m src.cli auth add jike      # 添加即刻认证
+python -m src.cli auth add jike      # 添加即刻认证（交互式）
 python -m src.cli auth test jike     # 测试认证
+python -m src.cli auth remove jike   # 删除认证
 
 # LLM 配置
 python -m src.cli llm setup          # 启动 LLM 配置向导
 python -m src.cli llm test           # 测试 LLM 连接
 python -m src.cli llm status         # 查看 LLM 配置状态
+python -m src.cli llm switch         # 切换 LLM 模型
 
 # 设置向导
 python -m src.cli quickstart         # 快速开始（完整设置向导）
 python -m src.cli setup templates    # 查看可用配置模板
+python -m src.cli setup wizard       # 运行完整设置向导
+python -m src.cli setup export       # 导出用户配置
+python -m src.cli setup import       # 导入用户配置
 ```
 
 ## API 端点
@@ -262,12 +272,12 @@ python -m src.cli setup templates    # 查看可用配置模板
 |------|------|------|
 | `/health` | GET | 健康检查 |
 | `/api/v1/reports/generate` | POST | 生成日报 |
-| `/api/v1/reports/{id}` | GET | 获取日报（支持 format=markdown） |
+| `/api/v1/reports/{id}` | GET | 获取日报（支持 format=markdown/json） |
 | `/api/v1/reports` | GET | 获取日报列表 |
 | `/api/v1/reports/{id}/push` | POST | 推送日报 |
 | `/api/v1/contents` | GET | 获取内容列表 |
 | `/api/v1/collect` | POST | 手动触发采集 |
-| `/api/v1/feedback` | POST | 提交反馈 |
+| `/api/v1/feedback` | POST | 提交反馈（like/dislike/save/dismiss） |
 | `/api/v1/profile/{user_id}` | GET/PUT | 获取/更新用户画像 |
 | `/api/v1/reload` | POST | 重新加载配置（热更新） |
 
@@ -338,11 +348,12 @@ python -m src.cli setup templates    # 查看可用配置模板
 
 ### 核心类
 
-1. **DailyAgentService** (`service.py`): 核心业务服务，编排整个流程
-2. **BaseCollector** (`collector/base.py`): 采集器基类，所有采集器继承此类
-3. **ContentProcessor** (`processor/summarizer.py`): 内容处理主类
-4. **ContentSelector** (`filter/selector.py`): 内容筛选选择器
-5. **Publisher** (`output/publisher.py`): 推送发布器
+1. **DailyAgentService** (`service.py`): 核心业务服务，编排整个流程（采集-处理-生成-推送）
+2. **BaseCollector** (`collector/base.py`): 采集器基类，所有采集器继承此类，实现 `collect()` 方法
+3. **ContentProcessor** (`processor/summarizer.py`): 内容处理主类，整合清洗、提取、摘要
+4. **ContentSelector** (`filter/selector.py`): 内容筛选选择器，负责质量评分、去重、排序
+5. **Publisher** (`output/publisher.py`): 推送发布器，支持多渠道推送
+6. **TaskScheduler** (`scheduler.py`): 任务调度器，基于 APScheduler
 
 ### 数据库模型
 
@@ -351,18 +362,18 @@ python -m src.cli setup templates    # 查看可用配置模板
 - **DailyReportItemDB**: 日报-内容关联表
 - **UserProfileDB**: 用户画像表
 - **UserFeedbackDB**: 用户反馈表
-- **AuthCredentialDB**: 认证凭证表（加密存储）
+- **AuthCredentialDB**: 认证凭证表（加密存储 Cookie/Token）
 
 ## 安全注意事项
 
 1. **API 密钥管理**:
    - 所有密钥存储在 `.env` 文件，禁止提交到版本控制
-   - 使用 `mask_sensitive_data()` 函数对日志中的敏感信息进行脱敏
-   - `.env` 文件权限设置为 `0o600`（仅所有者可读写）
+   - 使用 `mask_sensitive_data()` 函数（位于 `config.py`）对日志中的敏感信息进行脱敏
+   - `.env` 文件权限建议设置为 `0o600`（仅所有者可读写）
 
 2. **认证凭证加密**:
-   - 使用 Fernet 对称加密存储 Cookie/Token
-   - 加密密钥从 `API_SECRET_KEY` 派生
+   - 使用 Fernet 对称加密存储 Cookie/Token（`auth_manager.py`）
+   - 加密密钥从 `API_SECRET_KEY` 派生（SHA256 + base64）
    - 支持凭证过期自动检测和提醒
 
 3. **数据库安全**:
@@ -387,6 +398,7 @@ python -m src.cli setup templates    # 查看可用配置模板
 - [x] CLI 工具
 - [x] Docker 部署
 - [x] 热更新配置
+- [x] 认证管理（支持需要登录的渠道）
 
 待开发功能：
 - [ ] Playwright 网页采集增强
