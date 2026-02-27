@@ -161,6 +161,9 @@ def start(mode: str, template: str):
         # 检查是否首次启动
         is_first_run = not os.path.exists("data/daily.db")
         
+        # 使用 nonlocal 访问外部的 mode 参数
+        nonlocal mode
+        
         if is_first_run and not mode:
             # 首次启动，交互式选择模式
             console.print("""
