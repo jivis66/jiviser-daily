@@ -8,10 +8,12 @@ from typing import Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.collector import (
+    BilibiliCollector,
     CollectorManager,
     CollectorResult,
     HackerNewsCollector,
-    RSSCollector
+    RSSCollector,
+    XiaohongshuCollector
 )
 from src.config import get_column_config, get_settings
 from src.database import (
@@ -78,7 +80,15 @@ class DailyAgentService:
                             print(f"[Service] 注册 HN 采集器: {name}")
                         # 可以添加更多 API 采集器
                     
-                    # TODO: 添加更多采集器类型
+                    elif source_type == "bilibili":
+                        collector = BilibiliCollector(name, source_config)
+                        self.collector_manager.register(collector)
+                        print(f"[Service] 注册 B站采集器: {name}")
+                    
+                    elif source_type == "xiaohongshu":
+                        collector = XiaohongshuCollector(name, source_config)
+                        self.collector_manager.register(collector)
+                        print(f"[Service] 注册小红书采集器: {name}")
                     
                 except Exception as e:
                     print(f"[Service] 注册采集器失败 {name}: {e}")

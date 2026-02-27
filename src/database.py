@@ -151,13 +151,11 @@ _async_session_maker = None
 
 
 def get_database_url() -> str:
-    """获取异步数据库URL"""
+    """获取异步数据库URL（仅支持 SQLite）"""
     url = settings.database_url
     # 转换 SQLite URL 为异步版本
     if url.startswith("sqlite:///"):
         url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://")
     return url
 
 

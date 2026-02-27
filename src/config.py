@@ -33,15 +33,11 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="服务绑定地址")
     port: int = Field(default=8080, description="服务端口")
     
-    # ===== 数据库配置 =====
+    # ===== 数据库配置（仅支持 SQLite）=====
     database_url: str = Field(
         default=f"sqlite:///{DATA_DIR}/daily.db",
-        description="数据库连接URL"
+        description="SQLite数据库路径"
     )
-    
-    # ===== Redis 配置 =====
-    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis连接URL")
-    use_redis: bool = Field(default=False, description="是否使用Redis")
     
     # ===== LLM 配置 =====
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API密钥")

@@ -155,6 +155,65 @@ columns:
       dedup_strategy: "exact"
       summarize: "paragraph"
 
+  - id: "video_content"
+    name: "📺 视频内容"
+    description: "B站热门视频、技术分享"
+    enabled: true
+    max_items: 5
+    order: 6
+    sources:
+      - type: "bilibili"
+        name: "B站热门"
+        provider: "bilibili"
+        collect_type: "popular"
+        limit: 5
+        weight: 1.0
+        filter:
+          keywords: ["科技", "编程", "AI", "教程", "干货"]
+      
+      - type: "bilibili"
+        name: "B站科技区"
+        provider: "bilibili"
+        collect_type: "search"
+        keyword: "科技前沿"
+        limit: 3
+        weight: 0.8
+    
+    organization:
+      sort_by: "time"
+      dedup_strategy: "exact"
+      summarize: "3_points"
+
+  - id: "social_content"
+    name: "📱 社交精选"
+    description: "小红书精选笔记、生活分享"
+    enabled: true
+    max_items: 5
+    order: 7
+    sources:
+      - type: "xiaohongshu"
+        name: "小红书科技"
+        provider: "xiaohongshu"
+        collect_type: "search"
+        keyword: "科技数码"
+        limit: 3
+        weight: 1.0
+        filter:
+          keywords: ["数码", "科技", "评测", "体验"]
+      
+      - type: "xiaohongshu"
+        name: "小红书职场"
+        provider: "xiaohongshu"
+        collect_type: "search"
+        keyword: "职场干货"
+        limit: 3
+        weight: 0.8
+    
+    organization:
+      sort_by: "time"
+      dedup_strategy: "exact"
+      summarize: "3_points"
+
 # ===== 智能组合规则 =====
 composition_rules:
   # 内容平衡：避免单一来源占比过高

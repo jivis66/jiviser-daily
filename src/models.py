@@ -25,6 +25,8 @@ class SourceType(str, Enum):
     RSS = "rss"
     API = "api"
     WEB = "web"
+    VIDEO = "video"           # 视频平台 (B站、YouTube等)
+    SOCIAL = "social"         # 社交平台 (小红书、微博等)
     TWITTER = "twitter"
     GITHUB = "github"
     SLACK = "slack"
