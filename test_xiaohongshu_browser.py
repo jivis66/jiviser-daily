@@ -125,50 +125,44 @@ async def test_xiaohongshu_with_browser():
         else:
             print(f"   ✗ 搜索未返回结果（可能需要等待页面加载或检查关键词）")
         
-        # 测试 3: API 直接访问
-        print("\n[6] 测试 API 直接访问...")
+        # 测试 3: 检查登录状态（通过页面数据而非直接 API）
+        print("\n[6] 检查登录状态...")
         
         # 获取当前 cookie
         cookies = await context.cookies()
         cookie_dict = {c['name']: c['value'] for c in cookies}
-        cookie_str = "; ".join([f"{k}={v}" for k, v in cookie_dict.items()])
         
         print(f"   Cookie 数量: {len(cookies)}")
         print(f"   关键 Cookie: {', '.join([c for c in cookie_dict.keys() if c in ['web_session', 'a1', 'xsecappid']])}")
         
-        # 使用 fetch 在页面中调用 API
-        api_result = await page.evaluate("""async () => {
-            try {
-                const response = await fetch('https://edith.xiaohongshu.com/api/sns/web/v1/user/selfinfo', {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json, text/plain, */*',
-                        'Referer': 'https://www.xiaohongshu.com/'
-                    },
-                    credentials: 'include'
-                });
+        # 通过页面状态检查登录
+        login_check = await page.evaluate("""() => {
+            // 检查页面中是否有用户相关信息
+            const state = window.__INITIAL_STATE__;
+            if (state && state.user && state.user.userInfo) {
                 return {
-                    status: response.status,
-                    data: await response.json()
+                    loggedIn: true,
+                    user: state.user.userInfo
                 };
-            } catch (e) {
-                return { error: e.message };
             }
+            // 检查 DOM 中是否有登录标识
+            const userElements = document.querySelectorAll('.user-nickname, .avatar img');
+            return {
+                loggedIn: userElements.length > 0,
+                elements: userElements.length
+            };
         }""")
         
-        if api_result.get('status') == 200:
-            data = api_result.get('data', {})
-            if data.get('success'):
-                user = data.get('data', {})
-                print(f"   ✓ API 访问成功")
+        if login_check.get('loggedIn'):
+            user = login_check.get('user', {})
+            if user.get('nickname'):
+                print(f"   ✓ 已登录")
                 print(f"   - 用户: {user.get('nickname')}")
-                print(f"   - ID: {user.get('user_id')}")
+                print(f"   - ID: {user.get('id')}")
             else:
-                print(f"   API 返回: {data.get('msg', '未知错误')}")
+                print(f"   ✓ 检测到登录状态")
         else:
-            print(f"   API 状态: {api_result.get('status', '失败')}")
-            if api_result.get('error'):
-                print(f"   错误: {api_result['error']}")
+            print(f"   ⚠ 可能未登录或登录已过期")
         
         await browser.close()
         
