@@ -5,7 +5,19 @@
 import asyncio
 from typing import Optional, Tuple
 
-from playwright.async_api import async_playwright, Page
+
+# Playwright 延迟导入，避免未安装时报错
+def _get_playwright():
+    try:
+        from playwright.async_api import async_playwright, Page
+        return async_playwright, Page
+    except ImportError:
+        raise ImportError(
+            "Playwright 未安装，请运行:\n"
+            "  pip install playwright\n"
+            "  python -m playwright install chromium"
+        )
+
 
 from src.auth_manager import get_auth_manager, AUTH_CONFIGS
 
@@ -28,14 +40,11 @@ class BrowserAuthHelper:
         if not self.config:
             return False, f"不支持的渠道: {self.source_name}"
         
-        # 检查 Playwright 是否已安装
+        # 延迟导入 Playwright
         try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            return False, """Playwright 未安装，请运行:
-    pip install playwright
-    python -m playwright install chromium
-"""
+            async_playwright, Page = _get_playwright()
+        except ImportError as e:
+            return False, str(e)
         
         async with async_playwright() as p:
             # 启动浏览器
@@ -84,7 +93,7 @@ class BrowserAuthHelper:
                 await browser.close()
                 return False, f"获取 Cookie 失败: {e}"
     
-    async def _try_get_user_info(self, page: Page) -> Optional[str]:
+    async def _try_get_user_info(self, page) -> Optional[str]:
         """尝试获取用户昵称"""
         try:
             # 小红书
