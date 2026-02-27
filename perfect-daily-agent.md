@@ -376,7 +376,293 @@
 └── 呈现样式：布局、配色、字体
 ```
 
-### 6.3 智能问答
+### 6.3 用户设置中心
+
+#### 6.3.1 内容要求配置
+
+用户可自定义日报的结构、来源和组织形式。
+
+**分栏配置：**
+```yaml
+columns:
+  - id: "headlines"
+    name: "🔥 今日头条"
+    enabled: true
+    max_items: 5
+    order: 1
+    
+  - id: "tech"
+    name: "💻 技术前沿"
+    enabled: true
+    max_items: 8
+    order: 2
+    
+  - id: "business"
+    name: "📈 商业动态"
+    enabled: true
+    max_items: 5
+    order: 3
+    
+  - id: "deep_dive"
+    name: "📚 深度阅读"
+    enabled: false        # 可选分栏
+    max_items: 3
+    order: 4
+    schedule: "weekly"   # 特定频率显示
+```
+
+**分栏数据源配置：**
+```yaml
+column_sources:
+  headlines:
+    sources:
+      - type: "rss"
+        url: "https://techcrunch.com/feed/"
+        weight: 1.0
+        filter:
+          keywords: ["AI", "人工智能", "大模型"]
+          exclude: ["广告", "推广"]
+      
+      - type: "api"
+        provider: "newsapi"
+        category: "technology"
+        weight: 0.8
+      
+      - type: "twitter"
+        accounts: ["@OpenAI", "@DeepMind"]
+        weight: 0.6
+        filter:
+          min_likes: 100
+    
+    organization:
+      sort_by: "relevance"    # relevance | time | popularity
+      dedup_strategy: "semantic"  # exact | semantic | none
+      summarize: "3_points"   # none | 1_sentence | 3_points | paragraph
+      highlight_key_info: true
+  
+  tech:
+    sources:
+      - type: "github"
+        repos: ["trending"]
+        weight: 1.0
+      
+      - type: "arxiv"
+        categories: ["cs.AI", "cs.CL"]
+        weight: 0.9
+      
+      - type: "hackernews"
+        min_score: 100
+        weight: 0.8
+    
+    organization:
+      sort_by: "time"
+      group_by: "topic"       # topic | source | none
+      dedup_strategy: "exact"
+      summarize: "paragraph"
+```
+
+**内容获取与组织形式：**
+
+| 组织维度 | 选项 | 说明 |
+|----------|------|------|
+| **排序方式** | relevance / time / popularity | 按相关性、时间或热度排序 |
+| **去重策略** | exact / semantic / none | 精确去重、语义去重或不去重 |
+| **分组方式** | topic / source / none | 按主题、来源分组或平铺 |
+| **摘要形式** | none / 1_sentence / 3_points / paragraph | 不摘要、一句话、三点、段落 |
+| **筛选条件** | keywords / time_range / min_score | 关键词、时间范围、最低分数 |
+| **数量限制** | 1-20 条 | 每个分栏的最大条目数 |
+
+**智能组合规则：**
+```yaml
+composition_rules:
+  # 内容平衡：避免单一来源占比过高
+  source_diversity:
+    max_ratio_per_source: 0.4    # 单个来源不超过40%
+    min_source_count: 3          # 至少来自3个不同来源
+  
+  # 时间分布：优先最新内容，但保留重要旧闻
+  time_distribution:
+    recency_weight: 0.7
+    importance_weight: 0.3
+    max_age_hours: 48
+  
+  # 主题覆盖：确保主题多样性
+  topic_coverage:
+    min_topics: 3
+    avoid_topic_overlap: true
+```
+
+#### 6.3.2 非公开渠道鉴权设置
+
+用于配置需要身份验证的私有信息源。
+
+**鉴权配置结构：**
+```yaml
+authenticated_sources:
+  # Slack 工作区
+  - type: "slack"
+    name: "公司技术频道"
+    enabled: true
+    auth:
+      method: "oauth2"
+      credentials:
+        token: "${SLACK_BOT_TOKEN}"    # 环境变量引用
+        workspace: "mycompany"
+    scopes:
+      - "channels:read"
+      - "channels:history"
+    sources:
+      - channel: "#tech-news"
+        weight: 1.0
+      - channel: "#announcements"
+        weight: 0.8
+    filters:
+      exclude_bots: true
+      min_reactions: 3
+  
+  # Discord 服务器
+  - type: "discord"
+    name: "开源社区"
+    enabled: true
+    auth:
+      method: "bot_token"
+      credentials:
+        token: "${DISCORD_BOT_TOKEN}"
+    sources:
+      - guild: "OpenSourceCommunity"
+        channels: ["#general", "#announcements"]
+    filters:
+      pinned_only: false
+      include_attachments: true
+  
+  # 企业微信
+  - type: "wecom"
+    name: "企业内部"
+    enabled: true
+    auth:
+      method: "corp_secret"
+      credentials:
+        corp_id: "${WECOM_CORP_ID}"
+        corp_secret: "${WECOM_SECRET}"
+        agent_id: "${WECOM_AGENT_ID}"
+    sources:
+      - chat_type: "group"
+        chat_ids: ["tech_group_001"]
+  
+  # 飞书
+  - type: "lark"
+    name: "团队知识库"
+    enabled: true
+    auth:
+      method: "app_credentials"
+      credentials:
+        app_id: "${LARK_APP_ID}"
+        app_secret: "${LARK_APP_SECRET}"
+    sources:
+      - type: "wiki"
+        space_id: "tech_docs"
+      - type: "chat"
+        chat_ids: ["oc_xxx"]
+  
+  # Notion 数据库
+  - type: "notion"
+    name: "产品知识库"
+    enabled: true
+    auth:
+      method: "integration_token"
+      credentials:
+        token: "${NOTION_INTEGRATION_TOKEN}"
+    sources:
+      - database_id: "abc123"
+        filter:
+          property: "Status"
+          equals: "Published"
+  
+  # 私有 RSS（需认证）
+  - type: "rss_auth"
+    name: "付费资讯"
+    enabled: true
+    auth:
+      method: "basic_auth"
+      credentials:
+        username: "${PAID_NEWS_USER}"
+        password: "${PAID_NEWS_PASS}"
+    sources:
+      - url: "https://paid-news.com/feed"
+```
+
+**安全存储规范：**
+```yaml
+security:
+  # 凭证存储
+  credential_storage:
+    method: "vault"           # vault | env | kms
+    vault_provider: "hashicorp"  # hashicorp | aws_secrets | azure_keyvault
+    encryption: "aes-256-gcm"
+    key_rotation_days: 90
+  
+  # 传输安全
+  transmission:
+    tls_version: "1.3"
+    certificate_pinning: true
+    
+  # 访问控制
+  access_control:
+    user_binding: true        # 凭证绑定到具体用户
+    scope_limitation: true    # 最小权限原则
+    audit_logging: true       # 记录访问日志
+```
+
+**凭证管理界面：**
+```
+【鉴权源管理】
+
+已配置来源（3）：
+┌─────────────────────────────────────┐
+│ 🟢 公司 Slack  │ 已连接 │ 编辑 │ 删除 │
+│ 🟢 飞书知识库  │ 已连接 │ 编辑 │ 删除 │
+│ 🔴 Notion     │ 失效   │ 重连 │ 删除 │
+└─────────────────────────────────────┘
+
+[➕ 添加新来源]
+
+【添加鉴权源】
+选择平台：
+[Slack] [Discord] [企微] [飞书] [Notion] [RSS+认证] [Custom API]
+
+授权方式：
+○ OAuth 授权（推荐）
+○ 手动输入 Token
+○ 上传配置文件
+```
+
+**权限请求流程：**
+1. **OAuth 授权**：跳转平台授权页 → 用户确认权限 → 自动获取 Token
+2. **Token 输入**：用户从平台获取 Token → 安全输入 → 验证有效性
+3. **配置导入**：上传配置文件（如 `.env` 或 JSON）→ 解析并验证
+
+**健康检查与告警：**
+```yaml
+health_check:
+  interval: "1h"
+  timeout: "30s"
+  
+  checks:
+    - name: "token_validity"
+      action: "refresh_if_expired"
+      
+    - name: "permission_scope"
+      action: "notify_if_insufficient"
+      
+    - name: "source_reachability"
+      action: "alert_if_unreachable"
+  
+  notifications:
+    on_auth_failure: "immediate"
+    on_token_expiry: "24h_before"
+```
+
+### 6.4 智能问答
 
 - **内容问答**：基于当日内容回答用户问题
 - **历史检索**：搜索过往日报内容
