@@ -436,17 +436,28 @@ def auth_add(source_name: str, username: str = None):
         
         # 获取输入
         console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
-        console.print("(输入完成后按 Enter，支持多行输入，按 Ctrl+D 或输入空行结束)\n")
+        console.print("[dim](粘贴后按 Enter 确认，如需粘贴多行内容可继续输入，直接按 Enter 结束)\n[/dim]")
         
         lines = []
         try:
             while True:
-                line = input("> ")
-                if not line.strip():
+                try:
+                    line = input("> ")
+                    # 如果输入为空行
+                    if not line.strip():
+                        # 如果已经有输入内容，空行表示结束
+                        if lines:
+                            break
+                        # 如果还没有输入，继续等待（避免误触）
+                        console.print("[yellow]⚠️ 输入为空，请粘贴 cURL 命令后按 Enter[/yellow]")
+                        continue
+                    lines.append(line)
+                except EOFError:
+                    # Ctrl+D 结束输入
                     break
-                lines.append(line)
-        except EOFError:
-            pass
+        except KeyboardInterrupt:
+            console.print("\n[yellow]已取消[/yellow]")
+            return
         
         curl_command = "\n".join(lines).strip()
         

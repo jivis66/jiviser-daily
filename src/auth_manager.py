@@ -181,6 +181,11 @@ class CURLParser:
         """
         解析 cURL 命令，提取 headers、cookie 等信息
         
+        支持格式：
+        - Bash cURL: curl -H "Cookie: xxx" https://...
+        - PowerShell: curl -Headers @{"Cookie"="xxx"} -Uri https://...
+        - 纯 Cookie 字符串: a=1;b=2
+        
         Args:
             curl_command: cURL 命令字符串
             
@@ -196,8 +201,12 @@ class CURLParser:
             "raw_cookies": ""
         }
         
-        # 清理命令
+        # 清理命令：统一换行符、去除多余空格
         curl_command = curl_command.strip()
+        curl_command = curl_command.replace('\r\n', '\n').replace('\\\n', '')
+        curl_command = curl_command.replace('\\n', '')
+        
+        # 去除行首的 curl
         if curl_command.startswith("curl "):
             curl_command = curl_command[5:]
         
@@ -209,12 +218,16 @@ class CURLParser:
                 result["cookies"] = CURLParser._parse_cookie_string(result["raw_cookies"])
                 return result
         
-        # 使用 shlex 分割命令
+        # 检测 PowerShell 格式
+        if "-Headers @{" in curl_command or "-Uri " in curl_command:
+            return CURLParser._parse_powershell_curl(curl_command, result)
+        
+        # 使用 shlex 分割命令（处理引号）
         try:
             parts = shlex.split(curl_command)
-        except ValueError:
-            # 分割失败，尝试简单分割
-            parts = curl_command.split()
+        except ValueError as e:
+            # 分割失败，可能是引号不匹配，尝试修复
+            parts = CURLParser._fallback_split(curl_command)
         
         i = 0
         while i < len(parts):
@@ -257,6 +270,77 @@ class CURLParser:
             del result["headers"]["cookie"]
         
         return result
+    
+    @staticmethod
+    def _parse_powershell_curl(curl_command: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """解析 PowerShell 格式的 cURL 命令"""
+        import re
+        
+        # 提取 Headers
+        headers_match = re.search(r'-Headers @\{([^}]+)\}', curl_command)
+        if headers_match:
+            headers_str = headers_match.group(1)
+            # 解析 "Key"="Value" 格式
+            for match in re.finditer(r'"([^"]+)"\s*=\s*"([^"]*)"', headers_str):
+                key, value = match.groups()
+                key_lower = key.lower()
+                if key_lower == "cookie":
+                    result["raw_cookies"] = value
+                    result["cookies"] = CURLParser._parse_cookie_string(value)
+                else:
+                    result["headers"][key_lower] = value
+        
+        # 提取 URI/URL
+        uri_match = re.search(r'-(?:Uri|Url)\s+"([^"]+)"', curl_command)
+        if uri_match:
+            result["url"] = uri_match.group(1)
+        
+        # 提取 Method
+        method_match = re.search(r'-Method\s+(\w+)', curl_command)
+        if method_match:
+            result["method"] = method_match.group(1).upper()
+        
+        return result
+    
+    @staticmethod
+    def _fallback_split(curl_command: str) -> list:
+        """当 shlex 分割失败时的备用分割方法"""
+        parts = []
+        current = ""
+        in_quotes = False
+        quote_char = None
+        
+        i = 0
+        while i < len(curl_command):
+            char = curl_command[i]
+            
+            if char in ('"', "'"):
+                if not in_quotes:
+                    in_quotes = True
+                    quote_char = char
+                    if current:
+                        parts.append(current)
+                        current = ""
+                elif quote_char == char:
+                    in_quotes = False
+                    quote_char = None
+                    parts.append(current)
+                    current = ""
+                else:
+                    current += char
+            elif char.isspace() and not in_quotes:
+                if current:
+                    parts.append(current)
+                    current = ""
+            else:
+                current += char
+            
+            i += 1
+        
+        if current:
+            parts.append(current)
+        
+        return parts
     
     @staticmethod
     def _parse_cookie_string(cookie_str: str) -> Dict[str, str]:
