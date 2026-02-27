@@ -75,8 +75,6 @@ def push(report_id: str, channel: tuple):
             for ch, result in results.items():
                 status = "[green]✓[/green]" if result.success else "[red]✗[/red]"
                 console.print(f"{status} {ch}: {result.message}")
-            
-            break
     
     asyncio.run(_push())
 
@@ -330,8 +328,6 @@ def status():
                     console.print(f"  推送状态: {'已推送' if today_report.is_sent else '未推送'}")
                 else:
                     console.print("  生成日报: 0 份")
-                
-                break
         except Exception as e:
             console.print(f"  统计信息: 暂不可用 ({e})")
         
