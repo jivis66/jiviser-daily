@@ -412,56 +412,57 @@ def auth_list():
 @click.option("--username", "-u", help="用户名（可选）")
 def auth_add(source_name: str, username: str = None):
     """添加认证配置"""
-    async def _add():
-        from src.auth_manager import get_auth_manager, AUTH_CONFIGS
-        
-        manager = get_auth_manager()
-        config = manager.get_config(source_name)
-        
-        if not config:
-            console.print(f"[red]不支持的渠道: {source_name}[/red]")
-            console.print("\n支持的渠道:")
-            for key, cfg in AUTH_CONFIGS.items():
-                console.print(f"  • [green]{key}[/green] - {cfg.display_name}")
-            return
-        
-        # 显示帮助信息
-        console.print(Panel(
-            f"[bold blue]正在为 [{config.display_name}] 配置认证信息[/bold blue]\n\n"
-            f"{config.help_text}\n\n"
-            "[yellow]提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串[/yellow]",
-            title="认证配置向导",
-            border_style="blue"
-        ))
-        
-        # 获取输入
-        console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
-        console.print("[dim](支持单行/多行，输入 'done' 或按 Ctrl+D/Z 结束)\n[/dim]")
-        
-        lines = []
-        try:
-            while True:
-                try:
-                    line = input()
-                    # 检测结束标记
-                    if line.strip().lower() == 'done':
-                        break
-                    lines.append(line)
-                except EOFError:
+    from src.auth_manager import get_auth_manager, AUTH_CONFIGS
+    
+    manager = get_auth_manager()
+    config = manager.get_config(source_name)
+    
+    if not config:
+        console.print(f"[red]不支持的渠道: {source_name}[/red]")
+        console.print("\n支持的渠道:")
+        for key, cfg in AUTH_CONFIGS.items():
+            console.print(f"  • [green]{key}[/green] - {cfg.display_name}")
+        return
+    
+    # 显示帮助信息
+    console.print(Panel(
+        f"[bold blue]正在为 [{config.display_name}] 配置认证信息[/bold blue]\n\n"
+        f"{config.help_text}\n\n"
+        "[yellow]提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串[/yellow]",
+        title="认证配置向导",
+        border_style="blue"
+    ))
+    
+    # 获取输入（同步部分，在 asyncio.run 之前执行）
+    console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
+    console.print("[dim](支持单行/多行，输入 'done' 或按 Ctrl+D/Z 结束)\n[/dim]")
+    
+    lines = []
+    try:
+        while True:
+            try:
+                line = input()
+                # 检测结束标记
+                if line.strip().lower() == 'done':
                     break
-        except KeyboardInterrupt:
-            console.print("\n[yellow]已取消[/yellow]")
-            return
-        
-        curl_command = "\n".join(lines).strip()
-        
-        # 清理多行 cURL 的续行符
-        curl_command = curl_command.replace("\\\n", " ").replace("\\\r\n", " ")
-        
-        if not curl_command:
-            console.print("[red]输入为空，取消配置[/red]")
-            return
-        
+                lines.append(line)
+            except EOFError:
+                break
+    except KeyboardInterrupt:
+        console.print("\n[yellow]已取消[/yellow]")
+        return
+    
+    curl_command = "\n".join(lines).strip()
+    
+    # 清理多行 cURL 的续行符
+    curl_command = curl_command.replace("\\\n", " ").replace("\\\r\n", " ")
+    
+    if not curl_command:
+        console.print("[red]输入为空，取消配置[/red]")
+        return
+    
+    # 异步部分：保存和测试
+    async def _save_and_test():
         # 添加认证
         with console.status("[bold green]正在保存认证配置..."):
             success, message = await manager.add_auth(source_name, curl_command, username)
@@ -483,7 +484,7 @@ def auth_add(source_name: str, username: str = None):
         else:
             console.print(f"\n[red]✗ {message}[/red]")
     
-    asyncio.run(_add())
+    asyncio.run(_save_and_test())
 
 
 @auth.command("update")
