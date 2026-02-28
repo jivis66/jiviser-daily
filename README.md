@@ -197,6 +197,9 @@ python daily.py --date 2024-01-15
 
 # 指定用户生成
 python daily.py --user alice
+
+# 静默模式（适合定时任务）
+python daily.py --quiet
 ```
 
 ### 推送日报
@@ -207,6 +210,11 @@ python daily.py send
 
 # 推送到指定渠道
 python daily.py send --channel telegram
+python daily.py send --channel slack
+python daily.py send --channel markdown
+
+# 推送到多个渠道（使用完整 CLI）
+python -m src.cli push <report_id> --channels telegram,slack,email
 ```
 
 ### 系统管理
@@ -223,6 +231,37 @@ python daily.py config edit
 
 # 查看所有数据源
 python daily.py sources
+
+# 初始化/重新配置
+python daily.py --init
+```
+
+### 典型使用场景
+
+**场景 1：晨间自动推送（定时任务）**
+```bash
+# 添加到 crontab（每天 8:30 生成并推送）
+30 8 * * * cd /path/to/daily && python daily.py --quiet && python daily.py send
+```
+
+**场景 2：多用户家庭共享**
+```bash
+# 为不同家庭成员生成个性化日报
+python daily.py --user dad --date 2024-01-15
+python daily.py --user mom --date 2024-01-15
+```
+
+**场景 3：仅保存到本地（不推送）**
+```bash
+# 只生成 Markdown 文件，不发送到任何渠道
+# 在配置中只启用 markdown 渠道
+python daily.py
+```
+
+**场景 4：临时预览测试**
+```bash
+# 快速预览今日日报效果（不保存数据库）
+python daily.py --preview
 ```
 
 ### 高级 CLI（完整功能）
@@ -236,6 +275,9 @@ python -m src.cli preview
 python -m src.cli test source "Hacker News"
 python -m src.cli test channel telegram
 
+# 渠道测试（测试所有配置的渠道）
+python -m src.cli test channels --all
+
 # 配置管理
 python -m src.cli config export --output my-config.yaml
 python -m src.cli config import my-config.yaml
@@ -244,6 +286,11 @@ python -m src.cli setup --module llm
 # 报告管理
 python -m src.cli reports list
 python -m src.cli reports view <report_id>
+
+# 渠道管理（完整 CLI）
+python -m src.cli channels list          # 列出所有配置渠道
+python -m src.cli channels test          # 测试所有渠道连接
+python -m src.cli channels add telegram  # 交互式添加渠道
 ```
 
 ---
@@ -283,25 +330,52 @@ python -m src.cli setup --template tech_developer
 
 ## 📡 推送渠道配置
 
+系统支持 8 种推送渠道：
+
+| 渠道 | 类型 | 说明 |
+|------|------|------|
+| **Telegram** | 即时通讯 | 海外最流行的消息平台 |
+| **Slack** | 团队协作 | 适合团队共享日报 |
+| **Discord** | 社区/游戏 | 适合社区或兴趣小组 |
+| **Email** | 邮件 | 支持任意 SMTP 服务 |
+| **Webhook** | 自定义 | 推送到自定义 HTTP 端点 |
+| **Markdown** | 本地文件 | 保存为本地 Markdown 文件 |
+| **iMessage** | 苹果生态 | macOS 用户专属 |
+| **WhatsApp** | 即时通讯 | 国际主流通讯工具 |
+
 ### Telegram
 
 1. 找 [@BotFather](https://t.me/botfather) 创建 Bot，获取 Token
 2. 找 [@userinfobot](https://t.me/userinfobot) 获取 Chat ID
-3. 配置环境变量或交互式输入
+3. 配置环境变量：
+```bash
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+```
 
 ### Slack
 
 1. 访问 [Slack API](https://api.slack.com/apps) 创建 App
 2. 添加 `chat:write` 权限，安装到工作区
 3. 复制 Bot Token（以 `xoxb-` 开头）
+4. 配置环境变量：
+```bash
+SLACK_BOT_TOKEN=xoxb-your-token
+SLACK_CHANNEL=#daily
+```
 
 ### Discord
 
 1. 访问 [Discord Developer](https://discord.com/developers/applications) 创建 Bot
 2. 获取 Bot Token，开启 `Send Messages` 权限
 3. 右键频道 → 复制频道 ID
+4. 配置环境变量：
+```bash
+DISCORD_BOT_TOKEN=your-bot-token
+DISCORD_CHANNEL_ID=your-channel-id
+```
 
-### 邮件
+### 邮件 (Email)
 
 支持任意 SMTP 服务：
 ```bash
@@ -309,6 +383,46 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password  # Gmail 需使用应用专用密码
+SMTP_TO=recipient@example.com    # 收件人地址
+```
+
+### Webhook
+
+推送日报到自定义 HTTP 端点：
+```bash
+WEBHOOK_URL=https://your-server.com/webhook
+WEBHOOK_HEADERS='{"Authorization": "Bearer token"}'  # 可选
+```
+
+### Markdown（本地文件）
+
+保存日报为本地 Markdown 文件，适合：
+-  Obsidian/Notion 等笔记软件用户
+- 需要存档备份的场景
+- 不想使用云端推送的用户
+
+配置：
+```bash
+MARKDOWN_OUTPUT_PATH=~/Documents/DailyReports  # 保存路径
+```
+
+### iMessage（macOS 专属）
+
+自动发送 iMessage 到指定联系人（仅支持 macOS）：
+```bash
+# 配置接收人手机号或邮箱
+IMESSAGE_TO=+86138xxxxxxxxx
+```
+
+**注意**：首次使用需要在系统偏好设置 → 安全性与隐私 → 辅助功能中授权终端访问。
+
+### WhatsApp
+
+通过 WhatsApp Business API 发送：
+```bash
+WHATSAPP_API_KEY=your-api-key
+WHATSAPP_PHONE_NUMBER=your-phone-number-id
+WHATSAPP_TO=recipient-phone-number
 ```
 
 ---
@@ -619,25 +733,87 @@ curl -X POST http://localhost:8080/api/v1/feedback \
 
 完整环境变量参考 `.env.example`，常用配置：
 
+### 基础配置
 ```bash
-# 基础配置
 DEBUG=false
 LOG_LEVEL=info
 PORT=8080
+DEFAULT_PUSH_TIME=09:00          # 默认推送时间
+CONTENT_RETENTION_DAYS=30        # 内容保留天数
+```
 
-# LLM 配置
+### LLM 配置
+```bash
+# OpenAI
 OPENAI_API_KEY=sk-xxx
 OPENAI_MODEL=gpt-4o-mini
 
-# 推送配置
-TELEGRAM_BOT_TOKEN=xxx
-TELEGRAM_CHAT_ID=xxx
-SLACK_BOT_TOKEN=xoxb-xxx
-SLACK_CHANNEL=#daily
+# 或 OpenRouter（支持 Claude、Gemini 等）
+OPENROUTER_API_KEY=sk-or-xxx
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
 
-# 采集配置
-MAX_CONCURRENT_COLLECTORS=5
-CONTENT_RETENTION_DAYS=30
+# 或 Kimi（Moonshot）
+MOONSHOT_API_KEY=sk-xxx
+MOONSHOT_MODEL=moonshot-v1-8k
+```
+
+### 推送渠道配置
+
+#### Telegram
+```bash
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+```
+
+#### Slack
+```bash
+SLACK_BOT_TOKEN=xoxb-your-token
+SLACK_CHANNEL=#daily
+```
+
+#### Discord
+```bash
+DISCORD_BOT_TOKEN=your-bot-token
+DISCORD_CHANNEL_ID=your-channel-id
+```
+
+#### Email
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_TO=recipient@example.com
+```
+
+#### Webhook
+```bash
+WEBHOOK_URL=https://your-server.com/webhook
+WEBHOOK_HEADERS={"Authorization":"Bearer token"}
+```
+
+#### Markdown（本地文件）
+```bash
+MARKDOWN_OUTPUT_PATH=~/Documents/DailyReports
+```
+
+#### iMessage（macOS）
+```bash
+IMESSAGE_TO=+86138xxxxxxxxx
+```
+
+#### WhatsApp
+```bash
+WHATSAPP_API_KEY=your-api-key
+WHATSAPP_PHONE_NUMBER=your-phone-id
+WHATSAPP_TO=recipient-number
+```
+
+### 采集配置
+```bash
+MAX_CONCURRENT_COLLECTORS=5      # 最大并发采集器数
+REQUEST_TIMEOUT=30               # 请求超时时间
+RETRY_TIMES=3                    # 失败重试次数
 ```
 
 ---
@@ -648,12 +824,73 @@ CONTENT_RETENTION_DAYS=30
 
 系统内置 APScheduler，默认每日 9:00 自动生成并推送日报。
 
-修改推送时间：
+**方式 1：使用系统内置调度（推荐）**
 ```bash
-# 配置文件中修改
-python -m src.cli setup --module daily
-# 或设置环境变量
-DEFAULT_PUSH_TIME=08:00
+# 启动服务时自动开启定时任务
+python -m src.main
+
+# 或 Docker 方式
+STARTUP_MODE=fast docker-compose up -d
+```
+
+**方式 2：使用 Crontab（Linux/macOS）**
+```bash
+# 编辑 crontab
+crontab -e
+
+# 每天 8:30 生成并推送
+30 8 * * * cd /path/to/daily && /path/to/venv/bin/python daily.py --quiet && /path/to/venv/bin/python daily.py send
+
+# 仅生成不推送（保存到 Markdown）
+0 8 * * * cd /path/to/daily && /path/to/venv/bin/python daily.py --quiet
+```
+
+**方式 3：使用 systemd Timer（Linux）**
+```ini
+# ~/.config/systemd/user/daily-agent.timer
+[Unit]
+Description=Daily Agent Timer
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+### 多渠道推送策略
+
+**场景：不同内容推送到不同渠道**
+```yaml
+# config/columns.yaml
+# 技术内容 → Telegram
+# 商业内容 → Slack
+# 全部内容 → Email 存档
+```
+
+**场景：根据优先级选择渠道**
+```bash
+# 重要日报 → Telegram + Email
+python daily.py send --channel telegram,email
+
+# 普通日报 → 仅 Markdown 存档
+python daily.py send --channel markdown
+```
+
+### 渠道故障处理
+
+当某个渠道推送失败时：
+
+```bash
+# 1. 测试所有渠道连接
+python daily.py check
+
+# 2. 单独测试失败渠道
+python -m src.cli test channel telegram
+
+# 3. 重推到最后一次成功的渠道
+python -m src.cli push last --retry-failed
 ```
 
 ### 多用户支持
@@ -715,7 +952,27 @@ A: 编辑 `config/columns.yaml`，在对应分栏下添加 `type: rss` 的数据
 
 **Q: 推送失败怎么排查？**
 
-A: 使用 `python daily.py check` 运行系统检查，或查看日志 `docker-compose logs -f`。
+A: 1) 使用 `python daily.py check` 运行系统检查 2) 单独测试渠道：`python -m src.cli test channel telegram` 3) 查看日志 `docker-compose logs -f` 4) 检查对应渠道的环境变量是否配置正确
+
+**Q: 支持同时推送到多个渠道吗？**
+
+A: 支持！可以配置多个渠道，系统会同时推送到所有可用渠道。使用 `python daily.py send` 推送到所有配置渠道，或使用 `python daily.py send --channel telegram,email` 指定多个渠道。
+
+**Q: 如何选择推送渠道？**
+
+A: 推荐组合：
+- 个人使用：Telegram + Markdown 本地存档
+- 团队协作：Slack + Email 存档
+- 苹果生态：iMessage + Markdown
+- 海外用户：WhatsApp / Discord
+
+**Q: 某个渠道推送失败会影响其他渠道吗？**
+
+A: 不会。每个渠道独立推送，失败不会影响其他渠道。系统会记录每个渠道的推送状态。
+
+**Q: 只想保存到本地文件，不推送到云端？**
+
+A: 可以。配置 Markdown 渠道，设置 `MARKDOWN_OUTPUT_PATH` 保存路径。运行 `python daily.py` 生成的日报会自动保存到指定目录，不会发送到任何云端服务。
 
 **Q: 即刻/知乎认证失败怎么办？**
 
