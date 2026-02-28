@@ -187,7 +187,7 @@ async def init_fast_mode():
     table.add_row("[dim]数据库[/dim]", str(DATA_DIR / "daily.db"))
     console.print(table)
 
-    console.print(""\"
+    console.print("""
 [cyan]常用命令:[/cyan]
   python -m daily              # 生成日报
   python -m daily --preview    # 预览日报
@@ -300,8 +300,177 @@ async def check_system():
             console.print(f"   [dim]修复: {result.fix_command}[/dim]")
 
 
+async def setup_telegram():
+    """交互式 Telegram 配置向导"""
+    from rich.panel import Panel
+    from rich.prompt import Prompt, Confirm
+    from rich.text import Text
+    import httpx
+
+    console.print(Panel("""
+[bold blue]📱 Telegram 配置向导[/bold blue]
+
+通过这个向导，你可以快速配置 Telegram 推送功能。
+配置完成后，你的日报将自动推送到 Telegram。
+""", border_style="blue"))
+
+    # 步骤1: 获取 Bot Token
+    console.print("\n[bold cyan]步骤 1/3: 获取 Bot Token[/bold cyan]")
+    console.print("""
+1. 打开 Telegram，搜索 [bold]@BotFather[/bold]
+2. 发送命令: [green]/newbot[/green]
+3. 按提示输入机器人名称和用户名
+4. 复制获得的 [bold]API Token[/bold]
+    """)
+
+    bot_token = Prompt.ask(
+        "请输入 Bot Token",
+        password=True
+    ).strip()
+
+    if not bot_token:
+        console.print("[red]✗[/red] Bot Token 不能为空")
+        return
+
+    # 验证 Token 格式
+    if ":" not in bot_token:
+        console.print("[red]✗[/red] Bot Token 格式不正确，应该类似: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz")
+        return
+
+    # 步骤2: 获取 Chat ID
+    console.print("\n[bold cyan]步骤 2/3: 获取 Chat ID[/bold cyan]")
+    console.print("""
+有两种方式获取 Chat ID:
+
+[bold]方式 A - 自动获取（推荐）:[/bold]
+1. 在 Telegram 中找到你刚创建的机器人
+2. 发送一条消息给机器人（任意内容）
+3. 回到这里继续
+
+[bold]方式 B - 手动获取:[/bold]
+1. 访问: https://api.telegram.org/bot[你的token]/getUpdates
+2. 查找 "chat":{"id":123456789
+3. 记录这个数字
+    """)
+
+    auto_get = Confirm.ask("是否自动获取 Chat ID?", default=True)
+
+    chat_id = None
+    if auto_get:
+        # 尝试自动获取
+        with console.status("[bold green]正在获取 Chat ID，请先在 Telegram 给机器人发一条消息..."):
+            await asyncio.sleep(2)  # 给用户时间发消息
+
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"https://api.telegram.org/bot{bot_token}/getUpdates",
+                        timeout=10
+                    )
+                    data = response.json()
+
+                    if data.get("ok") and data.get("result"):
+                        # 提取 chat_id
+                        for update in data["result"]:
+                            if "message" in update:
+                                chat_id = update["message"]["chat"]["id"]
+                                chat_type = update["message"]["chat"]["type"]
+                                chat_title = update["message"]["chat"].get("title", "Private Chat")
+                                break
+
+                        if chat_id:
+                            console.print(f"[green]✓[/green] 找到对话: {chat_title} (ID: {chat_id})")
+                        else:
+                            console.print("[yellow]⚠[/yellow] 未找到对话，请确保已给机器人发送消息")
+                    else:
+                        console.print("[yellow]⚠[/yellow] 无法获取更新，请检查 Bot Token 是否正确")
+            except Exception as e:
+                console.print(f"[yellow]⚠[/yellow] 自动获取失败: {e}")
+
+    if not chat_id:
+        # 手动输入
+        chat_id_input = Prompt.ask("请输入 Chat ID")
+        try:
+            chat_id = int(chat_id_input.strip())
+        except ValueError:
+            console.print("[red]✗[/red] Chat ID 必须是数字")
+            return
+
+    # 步骤3: 测试连接
+    console.print("\n[bold cyan]步骤 3/3: 测试连接[/bold cyan]")
+
+    with console.status("[bold green]正在发送测试消息..."):
+        try:
+            async with httpx.AsyncClient() as client:
+                test_message = "🎉 Daily Agent 配置成功！\n\n你将在这里收到每日精选资讯。"
+                response = await client.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": chat_id, "text": test_message, "parse_mode": "HTML"},
+                    timeout=10
+                )
+                data = response.json()
+
+                if data.get("ok"):
+                    console.print("[green]✓[/green] 测试消息发送成功！")
+                else:
+                    console.print(f"[red]✗[/red] 测试失败: {data.get('description', '未知错误')}")
+                    return
+        except Exception as e:
+            console.print(f"[red]✗[/red] 测试失败: {e}")
+            return
+
+    # 保存配置
+    console.print("\n[bold cyan]保存配置...[/bold cyan]")
+
+    env_file = PROJECT_ROOT / ".env"
+    env_content = ""
+
+    if env_file.exists():
+        env_content = env_file.read_text(encoding="utf-8")
+
+    # 更新或添加 Telegram 配置
+    lines = env_content.split("\n")
+    new_lines = []
+    telegram_vars = {
+        "TELEGRAM_BOT_TOKEN": bot_token,
+        "TELEGRAM_CHAT_ID": str(chat_id)
+    }
+
+    # 移除旧的 Telegram 配置
+    for line in lines:
+        if not line.startswith("TELEGRAM_BOT_TOKEN=") and not line.startswith("TELEGRAM_CHAT_ID="):
+            new_lines.append(line)
+
+    # 添加新的配置
+    new_lines.append("")
+    new_lines.append("# Telegram 配置")
+    new_lines.append(f"TELEGRAM_BOT_TOKEN={bot_token}")
+    new_lines.append(f"TELEGRAM_CHAT_ID={chat_id}")
+
+    # 保存文件
+    env_file.write_text("\n".join(new_lines).strip() + "\n", encoding="utf-8")
+
+    console.print("[green]✓[/green] 配置已保存到 .env 文件")
+
+    # 显示配置摘要
+    console.print(Panel("""
+[bold green]✅ Telegram 配置完成！[/bold green]
+
+[cyan]配置信息:[/cyan]
+  • Bot Token: [dim]{}...{}[/dim]
+  • Chat ID: [dim]{}[/dim]
+
+[cyan]使用方法:[/cyan]
+  python daily.py send --channel telegram
+""".format(bot_token[:10], bot_token[-5:], chat_id), border_style="green"))
+
+
 async def manage_config(action: str = "edit"):
     """配置管理"""
+    if action == "telegram":
+        await setup_telegram()
+        return
+
     if action == "edit":
         import subprocess
         import os
@@ -375,6 +544,7 @@ def main():
   python -m daily send               # 推送最新日报
   python -m daily check              # 系统检查
   python -m daily config             # 查看配置
+  python -m daily config telegram    # 配置 Telegram 推送
   python -m daily sources            # 列出数据源
   python -m daily --init             # 初始化配置
         """
@@ -424,9 +594,9 @@ def main():
     config_parser.add_argument(
         "action",
         nargs="?",
-        choices=["edit", "show"],
+        choices=["edit", "show", "telegram"],
         default="show",
-        help="配置操作 (默认: show)"
+        help="配置操作 (edit/show/telegram, 默认: show)"
     )
 
     # sources 命令

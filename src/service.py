@@ -35,7 +35,8 @@ from src.database import (
     DailyReportDB,
     DailyReportItemDB,
     DailyReportRepository,
-    get_session
+    get_session,
+    init_db
 )
 from src.filter.selector import ContentSelector
 from src.models import ChannelType, ContentItem, ContentStatus, DailyReport
@@ -70,12 +71,16 @@ class DailyAgentService:
         """初始化服务"""
         if self._initialized:
             return
-        
+
         print("[Service] 初始化服务...")
-        
+
+        # 初始化数据库表
+        await init_db()
+        print("[Service] 数据库初始化完成")
+
         # 注册采集器
         await self._register_collectors()
-        
+
         self._initialized = True
         print("[Service] 服务初始化完成")
     

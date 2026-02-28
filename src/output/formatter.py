@@ -95,8 +95,8 @@ class MarkdownFormatter:
         meta = []
         if item.source:
             meta.append(f"来源: {item.source}")
-        if item.published_at:
-            meta.append(f"发布时间: {item.published_at.strftime('%Y-%m-%d %H:%M')}")
+        if item.publish_time:
+            meta.append(f"发布时间: {item.publish_time.strftime('%Y-%m-%d %H:%M')}")
         if meta:
             lines.append(f"*{', '.join(meta)}*")
         lines.append(f"")
@@ -269,8 +269,8 @@ class HTMLFormatter:
         meta = []
         if item.source:
             meta.append(f"来源: {self._escape_html(item.source)}")
-        if item.published_at:
-            meta.append(f"发布时间: {item.published_at.strftime('%Y-%m-%d %H:%M')}")
+        if item.publish_time:
+            meta.append(f"发布时间: {item.publish_time.strftime('%Y-%m-%d %H:%M')}")
         if meta:
             parts.append(f'<div class="item-meta">{" | ".join(meta)}</div>')
         
@@ -328,10 +328,26 @@ class HTMLFormatter:
 
 class ChatFormatter:
     """聊天格式（适合 Telegram/Slack 等聊天应用）"""
-    
+
     MAX_LENGTH = 4000
-    MAX_ITEMS = 50
-    
+    MAX_ITEMS_PER_COLUMN = 8
+
+    # 分栏图标映射
+    COLUMN_ICONS = {
+        "headlines": "🔥",
+        "tech": "💻",
+        "ai": "🤖",
+        "business": "💼",
+        "finance": "📈",
+        "science": "🔬",
+        "design": "🎨",
+        "lifestyle": "🌟",
+        "news": "📰",
+        "reading": "📚",
+        "video": "🎬",
+        "podcast": "🎧",
+    }
+
     def format_report(
         self,
         report: DailyReport,
@@ -342,86 +358,196 @@ class ChatFormatter:
         格式化日报为聊天消息（返回多条消息列表）
         """
         messages = []
-        current_msg = []
-        current_length = 0
-        
-        # 标题
-        header = f"📰 *{report.title}*\n"
-        header += f"📅 {report.date.strftime('%Y年%m月%d日')}\n"
-        header += f"📊 共 {report.total_items} 条精选内容\n\n"
-        
-        current_msg.append(header)
-        current_length = len(header)
-        
-        # 摘要
-        if report.summary:
-            summary = f"📌 *摘要*\n{report.summary}\n\n"
-            current_msg.append(summary)
-            current_length += len(summary)
-        
-        # 各分栏
+
+        # 主消息 - 标题和概述
+        header = self._format_header(report)
+        messages.append(header)
+
+        # 各分栏内容
         for col_config in columns_config:
             col_id = col_config.get("id")
             col_name = col_config.get("name", col_id)
             items = items_by_column.get(col_id, [])
-            
+
             if not items:
                 continue
-            
-            section_header = f"*📂 {col_name}*\n\n"
-            
-            # 检查是否需要开始新消息
-            if current_length + len(section_header) > self.MAX_LENGTH:
-                messages.append("".join(current_msg))
-                current_msg = [section_header]
-                current_length = len(section_header)
-            else:
-                current_msg.append(section_header)
-                current_length += len(section_header)
-            
-            # 条目
-            for item in items[:10]:  # 每栏最多10条
-                item_text = self._format_item_chat(item)
-                
-                if current_length + len(item_text) > self.MAX_LENGTH:
-                    messages.append("".join(current_msg))
-                    current_msg = [item_text]
-                    current_length = len(item_text)
-                else:
-                    current_msg.append(item_text)
-                    current_length += len(item_text)
-        
-        # 添加剩余内容
-        if current_msg:
-            messages.append("".join(current_msg))
-        
+
+            # 每个分栏单独一条消息
+            column_msg = self._format_column(col_name, items, col_id)
+            if column_msg:
+                messages.append(column_msg)
+
+        # 结尾消息
+        footer = self._format_footer(report)
+        messages.append(footer)
+
         return messages
-    
-    def _format_item_chat(self, item: ContentItem) -> str:
-        """格式化单个条目为聊天格式"""
+
+    def _format_header(self, report: DailyReport) -> str:
+        """格式化日报头部"""
         lines = []
-        
-        # 标题
-        title = item.title or "无标题"
-        if item.url:
-            lines.append(f"• *{title}*")
-            lines.append(f"  [阅读原文]({item.url})")
-        else:
-            lines.append(f"• *{title}*")
-        
-        # 摘要（缩短）
-        if item.summary:
-            summary = item.summary[:80] + "..." if len(item.summary) > 80 else item.summary
-            lines.append(f"  _{summary}_")
-        
-        # 标签
-        topics = self._ensure_list(item.topics)
-        if topics:
-            lines.append(f"  🏷 {' '.join(f'`{t}`' for t in topics[:3])}")
-        
+
+        # 主标题 - 使用装饰线
+        lines.append("╔══════════════════════════════════════╗")
+        lines.append(f"║  📰 {report.title:^28} ║")
+        lines.append("╚══════════════════════════════════════╝")
         lines.append("")
+
+        # 日期和统计
+        weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][report.date.weekday()]
+        lines.append(f"📅 *{report.date.strftime('%Y年%m月%d日')}* ({weekday})")
+        lines.append(f"📊 今日精选 *{report.total_items}* 条内容")
+
+        # 亮点
+        if report.highlights:
+            highlights = self._ensure_list(report.highlights)
+            if highlights:
+                lines.append("")
+                lines.append("⭐ *今日亮点*")
+                for i, hl in enumerate(highlights[:3], 1):
+                    lines.append(f"  {i}. {hl}")
+
+        lines.append("")
+        lines.append("─" * 30)
+
         return "\n".join(lines)
-    
+
+    def _format_column(self, col_name: str, items: List[ContentItem], col_id: str) -> str:
+        """格式化单个分栏"""
+        lines = []
+
+        # 分栏标题 - 带图标
+        icon = self.COLUMN_ICONS.get(col_id, "📂")
+        lines.append(f"\n{icon} *{col_name}*  「{len(items)}条」")
+        lines.append("")
+
+        # 条目列表
+        for idx, item in enumerate(items[:self.MAX_ITEMS_PER_COLUMN], 1):
+            lines.append(self._format_item_chat(item, idx))
+            lines.append("")  # 条目间空行
+
+        # 如果有更多条目，提示数量
+        if len(items) > self.MAX_ITEMS_PER_COLUMN:
+            lines.append(f"_...还有 {len(items) - self.MAX_ITEMS_PER_COLUMN} 条内容_")
+
+        return "\n".join(lines)
+
+    def _format_item_chat(self, item: ContentItem, index: int = 0) -> str:
+        """格式化单个条目为聊天格式 - 更丰富的展示"""
+        lines = []
+
+        # 序号 + 标题
+        prefix = f"{index}. " if index else "• "
+        title = item.title or "无标题"
+
+        # 评分指示器（质量/热度）
+        score_indicator = self._get_score_indicator(item)
+
+        if item.url:
+            lines.append(f"{prefix}*{title}* {score_indicator}")
+        else:
+            lines.append(f"{prefix}*{title}* {score_indicator}")
+
+        # 来源和时间 - 更紧凑
+        meta_parts = []
+        if item.source:
+            meta_parts.append(f"📰 {item.source}")
+        if item.publish_time:
+            time_str = self._format_relative_time(item.publish_time)
+            meta_parts.append(f"🕐 {time_str}")
+        if item.author:
+            meta_parts.append(f"✍️ {item.author}")
+
+        if meta_parts:
+            lines.append(f"   _{' | '.join(meta_parts)}_")
+
+        # 摘要 - 显示更多内容
+        if item.summary:
+            summary = item.summary[:120] + "..." if len(item.summary) > 120 else item.summary
+            lines.append(f"   ▫️ {summary}")
+
+        # 关键要点 - 如果有的话
+        key_points = self._ensure_list(item.key_points)
+        if key_points:
+            for point in key_points[:2]:  # 最多显示2个要点
+                point_text = str(point)[:50] + "..." if len(str(point)) > 50 else str(point)
+                lines.append(f"   💡 {point_text}")
+
+        # 标签 - 合并 topics 和 keywords
+        all_tags = []
+        topics = self._ensure_list(item.topics)
+        keywords = self._ensure_list(item.keywords)
+        all_tags.extend(topics)
+        all_tags.extend(keywords)
+
+        if all_tags:
+            tags_str = ' '.join(f'`{t}`' for t in all_tags[:5])
+            lines.append(f"   🏷 {tags_str}")
+
+        # 阅读时间和链接
+        if item.url:
+            read_time = f"(~{item.read_time}分钟)" if item.read_time else ""
+            lines.append(f"   🔗 [阅读原文]({item.url}) {read_time}")
+
+        return "\n".join(lines)
+
+    def _get_score_indicator(self, item: ContentItem) -> str:
+        """根据评分返回视觉指示器"""
+        indicators = []
+
+        # 质量评分
+        if item.quality_score >= 0.8:
+            indicators.append("⭐")
+        elif item.quality_score >= 0.6:
+            indicators.append("✨")
+
+        # 热度评分
+        if item.popularity_score >= 0.8:
+            indicators.append("🔥")
+        elif item.popularity_score >= 0.5:
+            indicators.append("📈")
+
+        return "".join(indicators)
+
+    def _format_relative_time(self, dt) -> str:
+        """格式化为相对时间"""
+        if not dt:
+            return ""
+
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+
+        # 确保 dt 有时区信息
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        diff = now - dt
+        hours = diff.total_seconds() / 3600
+
+        if hours < 1:
+            return "刚刚"
+        elif hours < 24:
+            return f"{int(hours)}小时前"
+        elif hours < 48:
+            return "昨天"
+        else:
+            return f"{int(hours / 24)}天前"
+
+    def _format_footer(self, report: DailyReport) -> str:
+        """格式化日报底部"""
+        lines = []
+
+        lines.append("─" * 30)
+        lines.append("")
+        lines.append("💡 *小贴士*")
+        lines.append("   • 点击链接可查看完整文章")
+        lines.append("   • 使用 `/config` 自定义你的日报")
+        lines.append("")
+        lines.append("🤖 由 DailyAgent 自动生成")
+        lines.append(f"⏰ 生成时间: {datetime.now().strftime('%H:%M')}")
+
+        return "\n".join(lines)
+
     def _ensure_list(self, value: Any) -> List[str]:
         """确保值为列表"""
         if value is None:
@@ -433,7 +559,7 @@ class ChatFormatter:
         if isinstance(value, (list, tuple)):
             return list(value)
         return []
-    
+
     def format_item(self, item: ContentItem) -> str:
         """格式化单个条目"""
         return self._format_item_chat(item)
@@ -477,7 +603,7 @@ class JSONFormatter:
                     "url": item.url,
                     "summary": item.summary,
                     "source": item.source,
-                    "published_at": item.published_at.isoformat() if item.published_at else None,
+                    "publish_time": item.publish_time.isoformat() if item.publish_time else None,
                     "topics": self._ensure_list(item.topics),
                     "keywords": self._ensure_list(item.keywords),
                 })

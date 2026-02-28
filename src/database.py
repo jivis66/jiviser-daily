@@ -89,7 +89,7 @@ class DailyReportDB(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     
-    items = relationship("DailyReportItemDB", back_populates="daily_report")
+    items = relationship("DailyReportItemDB", back_populates="daily_report", cascade="all, delete-orphan")
 
 
 class DailyReportItemDB(Base):
