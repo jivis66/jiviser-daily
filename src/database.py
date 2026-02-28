@@ -8,7 +8,7 @@ from typing import AsyncGenerator, List, Optional
 
 from sqlalchemy import (
     JSON, DateTime, Float, ForeignKey, Integer, String, Text, 
-    create_engine, select, delete, func
+    create_engine, select, delete, func, text
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -213,7 +213,11 @@ def init_engine():
         _engine = create_async_engine(
             url,
             echo=settings.debug,
-            future=True
+            future=True,
+            connect_args={
+                "timeout": 30,
+                "check_same_thread": False,
+            }
         )
     return _engine
 
@@ -222,6 +226,10 @@ async def init_db():
     """初始化数据库表"""
     engine = init_engine()
     async with engine.begin() as conn:
+        # 启用 WAL 模式，减少数据库锁定问题
+        if "sqlite" in str(engine.url):
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA synchronous=NORMAL"))
         await conn.run_sync(Base.metadata.create_all)
 
 
@@ -316,6 +324,25 @@ class ContentRepository:
             select(func.count()).where(ContentItemDB.status == status)
         )
         return result.scalar()
+    
+    async def get_by_status(
+        self, 
+        status: str,
+        date: Optional[datetime] = None,
+        limit: int = 100
+    ) -> List[ContentItemDB]:
+        """根据状态获取内容"""
+        query = select(ContentItemDB).where(ContentItemDB.status == status)
+        
+        if date:
+            start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=1)
+            query = query.where(ContentItemDB.fetch_time >= start, ContentItemDB.fetch_time < end)
+        
+        query = query.order_by(ContentItemDB.fetch_time.desc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        return result.scalars().all()
 
 
 class DailyReportRepository:
@@ -365,6 +392,15 @@ class DailyReportRepository:
         self.session.add(report_item)
         await self.session.flush()
         return report_item
+    
+    async def delete(self, report_id: str) -> bool:
+        """删除日报"""
+        report = await self.get_by_id(report_id)
+        if report:
+            await self.session.delete(report)
+            await self.session.flush()
+            return True
+        return False
 
 
 class AuthCredentialRepository:

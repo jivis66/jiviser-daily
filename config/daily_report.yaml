@@ -1,0 +1,31 @@
+user_id: default
+style: detailed
+columns:
+  - id: github
+    name: 🔥 GitHub 趋势
+    enabled: true
+    max_items: 5
+    order: 1
+  - id: ai_tech
+    name: 🤖 AI/技术
+    enabled: true
+    max_items: 5
+    order: 2
+  - id: dev_tools
+    name: 🛠️ 开发工具
+    enabled: true
+    max_items: 3
+    order: 3
+  - id: tech_news
+    name: 📰 科技新闻
+    enabled: true
+    max_items: 3
+    order: 4
+filter_rules:
+  min_quality_score: 65
+  time_window_hours: 24
+  dedup_level: medium
+summary:
+  method: rule
+  length: medium
+  include_key_points: true

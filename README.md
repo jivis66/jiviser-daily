@@ -6,7 +6,29 @@
 
 ## 🚀 5 分钟快速开始
 
-### 方式一：Docker（推荐）
+### 方式一：简化 CLI（推荐）
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/uhajivis-cell/openclaw-skills-daily.git
+cd openclaw-skills-daily
+
+# 2. 创建环境
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# 3. 首次运行（自动进入初始化向导）
+python daily.py
+
+# 常用命令
+python daily.py --preview     # 预览日报（不保存）
+python daily.py --date 2024-01-15  # 指定日期
+python daily.py send          # 推送最新日报
+python daily.py check         # 系统检查
+python daily.py sources       # 查看所有数据源
+```
+
+### 方式二：Docker
 
 ```bash
 # 1. 克隆仓库
@@ -14,7 +36,7 @@ git clone https://github.com/uhajivis-cell/openclaw-skills-daily.git
 cd openclaw-skills-daily
 
 # 2. 运行诊断，确保环境就绪
-python -m src.cli doctor
+python daily.py check
 
 # 3. 选择启动方式
 
@@ -26,14 +48,14 @@ SETUP_TEMPLATE=tech_developer docker-compose up -d
 
 # 方式 C: 先本地配置，再挂载到容器（推荐日常使用）
 # 先在本地运行配置向导，然后启动容器
-python -m src.cli setup wizard  # 完成配置（支持智能模板推荐）
-docker-compose up -d            # 启动容器（配置自动挂载）
+python daily.py --init        # 完成配置（支持智能模板推荐）
+docker-compose up -d          # 启动容器（配置自动挂载）
 
 # 4. 查看日志
 docker-compose logs -f
 ```
 
-### 方式二：本地运行
+### 方式三：本地运行（高级）
 
 ```bash
 # 1. 克隆仓库
@@ -44,11 +66,8 @@ cd openclaw-skills-daily
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# 3. 启动（首次启动会进入交互式配置）
-python -m src.cli start
-
-# 或直接使用 uvicorn（跳过交互配置）
-uvicorn src.main:app --reload
+# 3. 启动 FastAPI 服务
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8080
 ```
 
 ---
@@ -57,35 +76,36 @@ uvicorn src.main:app --reload
 
 | 特性 | 说明 |
 |------|------|
-| 🤖 **交互式登录** | 支持小红书等平台的浏览器自动登录，自动检测登录成功 |
-| 🛡️ **反检测** | 注入反检测脚本，绕过平台的自动化检测 |
-| 🔐 **安全存储** | Cookie/Token 使用 Fernet 加密，密钥派生自配置 |
+| 🚀 **简化 CLI** | 直观的 `python daily.py` 命令，零门槛使用 |
+| 🇨🇳 **中文优化** | 支持 30+ 国内信息源（科技媒体、社区、生活方式） |
+| 🤖 **智能摘要** | LLM 驱动的内容摘要和质量评估 |
+| 🔐 **认证采集** | 支持即刻、知乎等平台的认证采集（浏览器自动登录） |
 | 📰 **智能日报** | 多源采集 → 智能筛选 → 个性化排序 → 多格式输出 |
 | 🎯 **个性化** | 用户画像 + 兴趣偏好 + 反馈学习 |
 | ⏰ **定时推送** | 支持每日定时生成和推送到多种渠道 |
 
 ---
 
-## ⚡ 双模式启动
+## ⚡ 三种配置模式
 
-首次启动时，系统会检测配置状态并引导你选择：
+首次运行 `python daily.py` 时，系统会检测配置状态并引导你选择：
 
 | 模式 | 启动时间 | 特点 | 适合场景 |
 |------|----------|------|----------|
-| **Fast 模式** | 30 秒 | 零配置开箱即用，使用默认模板 | 快速体验、临时使用 |
-| **Configure 模式** | 3-5 分钟 | 完整交互式配置，个性化设置 | 日常使用、深度定制 |
+| **快速模式** | 30 秒 | 零配置开箱即用，使用默认模板 | 快速体验、临时使用 |
+| **智能模式** | 2-3 分钟 | AI 辅助配置，了解兴趣后自动推荐 | 推荐日常使用 |
+| **专家模式** | 5-10 分钟 | 完全手动控制所有配置选项 | 深度定制需求 |
 
-### 跳过交互，直接启动
+### 初始化命令
 
 ```bash
-# Fast 模式（零配置）
-python -m src.cli start --mode fast
+# 进入初始化向导
+python daily.py --init
 
-# Configure 模式（完整配置向导）
-python -m src.cli start --mode configure
-
-# 使用预设模板启动
-python -m src.cli start --template tech_developer
+# 或指定具体模式
+python daily.py --init fast    # 快速模式
+python daily.py --init smart   # 智能模式
+python daily.py --init expert  # 专家模式
 ```
 
 ### Docker 环境变量启动
@@ -100,177 +120,130 @@ docker run -e SETUP_TEMPLATE=product_manager daily-agent
 
 ---
 
-## 📝 配置流程（Configure 模式）
+## 📝 配置流程（智能模式）
 
-首次启动进入 Configure 模式后，按提示完成 5 步配置：
+首次运行 `python daily.py` 时，系统会引导你完成配置：
 
-### Step 1: 用户画像
+### 交互式初始化
+
+```bash
+$ python daily.py
+
+欢迎使用 Daily Agent !
+
+你的个性化智能日报助手
+
+主要功能:
+• 自动从多源采集信息（RSS、API、社交媒体）
+• 智能筛选和摘要（支持 LLM）
+• 个性化排序（基于你的兴趣）
+• 多格式输出（Markdown、Telegram、Slack、邮件）
+
+首次使用，请选择配置方式:
+
+请选择配置模式:
+
+  1. 快速模式 (推荐首次体验)
+     30 秒完成，使用默认模板
+
+  2. 智能模式 (推荐日常使用)
+     AI 辅助配置，了解你的兴趣后自动推荐
+
+  3. 专家模式 (深度定制)
+     完全手动控制所有配置选项
+
+请选择 [1-3]: 2
 ```
-👤 用户画像
+
+### 智能模式流程
+
+智能模式会询问你的职业和兴趣，然后 AI 自动为你推荐最佳配置：
+
+```
+🤖 AI 配置助手
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 您当前从事的行业是？
-   [1] 互联网/科技  [2] 金融/投资  [3] 咨询/商业分析
-   [4] 媒体/内容创作 [5] 学术研究 [6] 其他
+📝 请描述你的职业和兴趣（如：AI 产品经理，关注大模型、产品设计）
 
-请选择 [1-6]: 1
+> 我是一名后端开发，关注云原生、微服务架构和开源项目
 
-📝 您的职位或角色是？
-   [1] 技术开发者  [2] 产品经理  [3] 创业者/高管
-   [4] 投资人/分析师 [5] 其他
+🤖 分析中...
+   推荐模板: 后端开发者 (backend_dev)
+   匹配度: 95%
 
-请选择 [1-5]: 2
-```
+📝 推荐的数据源:
+   • 稀土掘金 - 后端技术
+   • 开源中国 - 开源资讯
+   • InfoQ - 架构设计
+   • V2EX - 开发者社区
 
-### Step 2: 兴趣偏好
-```
-🎯 兴趣偏好
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 选择配置方式：
-   [1] 🚀 快速配置 - 选择预设模板（推荐）
-   [2] 🎨 自定义配置 - 详细设置每一项
-
-请选择 [1-2]: 1
-
-📝 选择预设模板：
-   [1] 👨‍💻 技术开发者  [2] 💼 产品经理
-   [3] 💰 投资人     [4] 📊 商业分析师
-   [5] 🎨 设计师     [6] 📰 综合资讯
-
-请选择 [1-6]: 2
-```
-
-### Step 3: 日报设置
-```
-📰 日报设置
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 日报风格选择：
-   [1] 📰 新闻简报型  [2] 📖 深度阅读型
-   [3] 💬 对话简报型  [4] 📊 数据驱动型
-
-请选择 [1-4]: 2
-
-📝 日报分栏设置（按需启用/调整条数）：
-   [x] 🔥 今日头条 - 3条
-   [x] 🤖 AI/技术 - 5条
-   [x] 💰 商业/投资 - 3条
-   [ ] 🛠️ 产品/工具 - 2条
-   [ ] 📚 深度阅读 - 1条
-```
-
-### Step 4: LLM 配置（可选）
-```
-🤖 LLM 配置
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 选择 LLM 提供商：
-   [1] 🌐 OpenAI (推荐)
-   [2] 🔗 OpenRouter
-   [3] 🏠 Ollama (本地)
-   [4] 🌙 Kimi (Moonshot)
-   [5] 🔷 通义千问
-   [6] 🔶 智谱 GLM
-   [7] ⏭️  跳过
-
-请选择 [1-7]: 1
-
-请输入 OpenAI API Key: sk-xxxxxxxxxxxxxxxx
-
-✅ API Key 验证通过！
-```
-
-### Step 5: 推送渠道（可选）
-```
-📤 推送渠道
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 选择推送渠道：
-   [ ] Telegram
-   [ ] Slack
-   [ ] Discord
-   [ ] Email
-   [x] 暂不配置（可后续设置）
-
-配置完成后，系统会自动生成第一份日报！
+✅ 配置已生成！
 ```
 
 ---
 
-## 🎮 日常使用
+## 🎮 日常使用（简化 CLI）
 
 ### 生成日报
 
 ```bash
-# 生成今日日报
-python -m src.cli generate
+# 生成今日日报（默认命令）
+python daily.py
 
-# 指定日期生成
-python -m src.cli generate --date 2024-01-15
+# 预览模式（不保存到数据库）
+python daily.py --preview
+
+# 生成指定日期的日报
+python daily.py --date 2024-01-15
+
+# 指定用户生成
+python daily.py --user alice
+```
+
+### 推送日报
+
+```bash
+# 推送最新日报到所有配置渠道
+python daily.py send
 
 # 推送到指定渠道
-python -m src.cli push <report_id> --channel telegram
+python daily.py send --channel telegram
 ```
 
-### 查看与管理
+### 系统管理
 
 ```bash
-# 查看系统状态
-python -m src.cli status
+# 系统检查和诊断
+python daily.py check
 
 # 查看当前配置
-python -m src.cli config show
-
-# 导出配置（备份/迁移）
-python -m src.cli config export --output my-config.yaml
-
-# 导入配置
-python -m src.cli config import my-config.yaml
-```
-
-### 诊断与测试
-
-```bash
-# 一键诊断系统状态
-python -m src.cli doctor
-
-# 自动修复发现的问题
-python -m src.cli fix
-
-# 预览今日日报（不保存）
-python -m src.cli preview
-
-# 测试单个数据源
-python -m src.cli test source "Hacker News"
-
-# 测试推送渠道
-python -m src.cli test channel telegram
-
-# 测试 LLM 连接
-python -m src.cli test llm
-```
-
-### 配置管理
-
-```bash
-# 查看所有数据源
-python -m src.cli config sources
+python daily.py config
 
 # 编辑配置文件
-python -m src.cli config edit
+python daily.py config edit
 
-# 验证配置
-python -m src.cli config validate
+# 查看所有数据源
+python daily.py sources
 ```
 
-### 重新配置
+### 高级 CLI（完整功能）
+
+如需更多高级功能，使用完整 CLI：
 
 ```bash
-# 完整重新配置
-python -m src.cli setup --all
+# 诊断与测试
+python -m src.cli doctor
+python -m src.cli preview
+python -m src.cli test source "Hacker News"
+python -m src.cli test channel telegram
 
-# 仅修改特定模块
-python -m src.cli setup --module profile      # 用户画像
-python -m src.cli setup --module interests    # 兴趣偏好
-python -m src.cli setup --module daily        # 日报设置
-python -m src.cli setup --module llm          # LLM 配置
-python -m src.cli setup --module channels     # 推送渠道
+# 配置管理
+python -m src.cli config export --output my-config.yaml
+python -m src.cli config import my-config.yaml
+python -m src.cli setup --module llm
+
+# 报告管理
+python -m src.cli reports list
+python -m src.cli reports view <report_id>
 ```
 
 ---
@@ -340,6 +313,49 @@ SMTP_PASSWORD=your-app-password  # Gmail 需使用应用专用密码
 
 ---
 
+## 🇨🇳 中国信息源（Top 30+）
+
+系统内置支持 30+ 中国主流信息渠道，覆盖科技、商业、社区、生活方式：
+
+### 科技媒体
+| 名称 | 类型 | 采集器 |
+|------|------|--------|
+| 稀土掘金 | 开发者社区 | `juejin` |
+| 开源中国 | 开源资讯 | `oschina` |
+| InfoQ中文 | 企业技术 | `infoq_cn` |
+| 思否 | 开发者问答 | `segmentfault` |
+| 雷锋网 | AI/科技 | `leiphone` |
+
+### 商业媒体
+| 名称 | 类型 | 采集器 |
+|------|------|--------|
+| 虎嗅 | 商业科技 | `huxiu` |
+| 极客公园 | 产品创新 | `geekpark` |
+| 品玩 | 科技新闻 | `pingwest` |
+| 新浪科技 | 门户科技 | `sina_tech` |
+| 网易科技 | 门户科技 | `netease_tech` |
+
+### 社区
+| 名称 | 类型 | 采集器 |
+|------|------|--------|
+| V2EX | 开发者社区 | `v2ex` |
+| 雪球 | 投资社区 | `xueqiu` |
+| 华尔街见闻 | 财经新闻 | `wallstreetcn` |
+| ITPUB | IT社区 | `itpub` |
+| 知乎 | 问答平台 | `zhihu` |
+| 即刻 | 兴趣社交 | `jike` |
+
+### 生活方式/工具
+| 名称 | 类型 | 采集器 |
+|------|------|--------|
+| 少数派 | 效率工具 | `sspai` |
+| 爱范儿 | 创新消费 | `ifanr` |
+| 数字尾巴 | 数字生活 | `dgtle` |
+| 小众软件 | 软件推荐 | `appinn` |
+| 优设 | 设计资源 | `uisdc` |
+
+---
+
 ## 🤖 LLM 配置建议
 
 | 使用场景 | 推荐模型 | 获取方式 |
@@ -378,7 +394,7 @@ columns:
         url: "https://techcrunch.com/feed/"
         filter:
           keywords: ["AI", "人工智能"]
-      
+
       - type: "api"
         name: "Hacker News"
         provider: "hackernews"
@@ -389,11 +405,11 @@ columns:
 支持的数据源类型：
 - **RSS**: 任意 RSS/Atom 订阅源
 - **API**: Hacker News、GitHub Trending、NewsAPI 等
-- **社交媒体**: 
-  - B站（热门/搜索）
-  - 知乎（热榜/搜索）
-  - 即刻（需认证）
-  - 小红书（公开内容/关注流需认证）
+- **中国科技媒体**: 稀土掘金、开源中国、InfoQ中文、思否、雷锋网
+- **中国商业媒体**: 虎嗅、极客公园、品玩、新浪科技、网易科技
+- **中国社区**: V2EX、雪球、华尔街见闻、ITPUB、ChinaUnix
+- **生活方式/工具**: 少数派、爱范儿、数字尾巴、小众软件
+- **社交媒体**: B站、知乎、即刻（部分需认证）
 
 配置修改后热更新（无需重启）：
 ```bash
@@ -404,19 +420,21 @@ curl -X POST http://localhost:8080/api/v1/reload
 
 ## 🔐 私有渠道认证
 
-对于需要登录的渠道（即刻、小红书、知乎等），提供两种配置方式：
+对于需要登录的渠道（即刻、知乎、B站等），提供两种配置方式：
 
-### 方式一：浏览器自动登录（推荐小红书）
+### 方式一：浏览器自动登录（推荐）
 
-小红书等平台的交互式浏览器登录，自动获取并加密存储 Cookie：
+交互式浏览器登录，自动获取并加密存储 Cookie：
 
 ```bash
-# 小红书 - 浏览器自动登录（自动检测登录成功）
-python -m src.cli auth add xiaohongshu -b
-
-# 其他平台（即刻、知乎等）
+# 即刻 - 浏览器自动登录
 python -m src.cli auth add jike -b
+
+# 知乎
 python -m src.cli auth add zhihu -b
+
+# B站
+python -m src.cli auth add bilibili -b
 ```
 
 流程：启动浏览器 → 用户完成登录 → 自动提取 Cookie → 加密保存到数据库
@@ -440,8 +458,8 @@ python -m playwright install chromium
 ```bash
 # 添加认证（手动模式）
 python -m src.cli auth add jike -m
-python -m src.cli auth add xiaohongshu -m
 python -m src.cli auth add zhihu -m
+python -m src.cli auth add bilibili -m
 ```
 
 Cookie 获取方式：
@@ -458,10 +476,10 @@ Cookie 获取方式：
 python -m src.cli auth list
 
 # 测试认证状态
-python -m src.cli auth test xiaohongshu
+python -m src.cli auth test jike
 
 # 删除认证
-python -m src.cli auth remove xiaohongshu
+python -m src.cli auth remove jike
 
 # 查看认证配置指南
 python -m src.cli auth guide
@@ -558,24 +576,39 @@ curl -X POST http://localhost:8080/api/v1/feedback \
 .
 ├── src/                          # 源代码
 │   ├── collector/                # 采集模块
-│   │   ├── base.py               # 采集器基类
-│   │   ├── xiaohongshu_collector.py  # 小红书采集器
-│   │   ├── xiaohongshu_auth.py   # 小红书交互式鉴权（Playwright）
+│   │   ├── base.py               # 采集器基类（v1）
+│   │   ├── base_v2.py            # 采集器基类（v2，推荐新采集器使用）
+│   │   ├── base_auth_collector.py # 认证采集器基类
+│   │   ├── rss_collector.py      # RSS 采集器
+│   │   ├── api_collector.py      # API 采集器
+│   │   ├── china_tech_collector.py      # 中国科技媒体（掘金/开源中国/InfoQ等）
+│   │   ├── china_media_collector.py     # 中国商业媒体（虎嗅/极客公园/品玩等）
+│   │   ├── china_community_collector.py # 中国社区（V2EX/雪球等）
+│   │   ├── quality_life_collector.py    # 生活方式/工具媒体（少数派/爱范儿等）
+│   │   ├── zhihu_collector.py    # 知乎采集器
+│   │   ├── jike_collector.py     # 即刻采集器
+│   │   ├── bilibili_collector.py # B站采集器
 │   │   └── ...                   # 其他采集器
 │   ├── processor/                # 处理模块（清洗/摘要/分类）
+│   │   ├── batch_llm.py          # 批量 LLM 处理
+│   │   └── cache.py              # 处理结果缓存
 │   ├── filter/                   # 筛选排序模块
 │   ├── output/                   # 输出模块（格式化/推送）
 │   ├── personalization/          # 个性化模块（画像/学习）
 │   ├── auth_manager.py           # 认证管理（Cookie/Token 加密）
 │   ├── browser_auth.py           # 浏览器自动化认证
-│   ├── cli.py                    # 命令行工具
-│   └── main.py                   # FastAPI 入口
+│   ├── daily.py                  # 简化版 CLI（主要入口）
+│   ├── cli.py                    # 完整功能 CLI
+│   ├── main.py                   # FastAPI 入口
+│   ├── service.py                # 核心服务逻辑
+│   ├── config.py                 # 配置管理
+│   ├── database.py               # 数据库模型和仓库
+│   └── progress.py               # 进度显示和错误处理
 ├── config/                       # 配置文件
-│   ├── columns.yaml              # 日报分栏配置
+│   ├── columns.yaml              # 日报分栏配置（中国用户优化版）
 │   └── templates.yaml            # 用户画像模板
-├── docs/                         # 文档
-│   └── XIAOHONGSHU_AUTH.md       # 小红书鉴权详细文档
 ├── data/                         # 数据目录（SQLite）
+├── daily.py                      # 简化 CLI 入口（调用 src/daily.py）
 ├── docker-compose.yml            # Docker 部署
 └── requirements.txt              # Python 依赖
 ```
@@ -627,8 +660,8 @@ DEFAULT_PUSH_TIME=08:00
 
 ```bash
 # 为不同用户生成日报
-python -m src.cli generate --user alice
-python -m src.cli generate --user bob
+python daily.py --user alice
+python daily.py --user bob
 
 # 查看指定用户配置
 python -m src.cli config show --user alice
@@ -644,35 +677,33 @@ python -m src.cli config export --user alice --output alice-config.yaml
 python -m src.cli config import alice-config.yaml --user bob
 ```
 
-### 小红书认证采集
+### 即刻认证采集
 
-配置小红书认证后，采集关注流内容：
+配置即刻认证后，采集关注流内容：
 
 ```bash
-# 1. 配置小红书认证（浏览器自动登录）
-python -m src.cli auth add xiaohongshu -b
+# 1. 配置即刻认证（浏览器自动登录）
+python -m src.cli auth add jike -b
 
 # 2. 在 config/columns.yaml 中添加关注流数据源
-#    collector: xiaohongshu_feed
-#    auth_source: xiaohongshu
+#    collector: jike_feed
+#    auth_source: jike
 
 # 3. 手动触发采集测试
 python -m src.cli collect
 ```
 
-更多详情参见 [docs/XIAOHONGSHU_AUTH.md](docs/XIAOHONGSHU_AUTH.md)
-
 ---
 
 ## ❓ 常见问题
 
-**Q: Fast 模式和 Configure 模式有什么区别？**
+**Q: 快速模式、智能模式、专家模式有什么区别？**
 
-A: Fast 模式 30 秒零配置启动，使用默认模板，适合快速体验；Configure 模式提供完整个性化配置，3-5 分钟完成，适合日常使用。
+A: 快速模式 30 秒零配置启动，使用默认模板；智能模式使用 AI 了解你的兴趣后自动推荐配置；专家模式提供完全手动控制，适合深度定制。
 
-**Q: 如何切换到 Configure 模式？**
+**Q: 如何重新配置？**
 
-A: 运行 `python -m src.cli setup --mode configure` 随时进入完整配置向导。
+A: 运行 `python daily.py --init` 随时进入配置向导。
 
 **Q: 可以不配置 LLM 吗？**
 
@@ -684,20 +715,13 @@ A: 编辑 `config/columns.yaml`，在对应分栏下添加 `type: rss` 的数据
 
 **Q: 推送失败怎么排查？**
 
-A: 使用 `python -m src.cli auth test <channel>` 测试渠道连接，或查看日志 `docker-compose logs -f`。
+A: 使用 `python daily.py check` 运行系统检查，或查看日志 `docker-compose logs -f`。
 
-**Q: 小红书认证失败怎么办？**
+**Q: 即刻/知乎认证失败怎么办？**
 
 A: 1) 确保已安装 Playwright: `pip install playwright && python -m playwright install chromium`
-2) 使用浏览器自动登录: `python -m src.cli auth add xiaohongshu -b`
-3) 如果浏览器登录失败，可尝试手动方式: `python -m src.cli auth add xiaohongshu -m`
-
-**Q: 为什么小红书需要特殊处理？**
-
-A: 小红书有严格的反爬机制，普通 HTTP 请求容易被拦截。交互式浏览器登录可以：
-- 模拟真实用户行为
-- 自动处理反检测
-- 获取完整的登录态 Cookie
+2) 使用浏览器自动登录: `python -m src.cli auth add jike -b`
+3) 如果浏览器登录失败，可尝试手动方式: `python -m src.cli auth add jike -m`
 
 ---
 
@@ -707,4 +731,4 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ---
 
-**快速开始 → [5 分钟快速开始](#-5-分钟快速开始)** | **配置详情 → [配置流程](#-配置流程configure-模式)** | **API 文档 → `http://localhost:8080/docs`**
+**快速开始 → [5 分钟快速开始](#-5-分钟快速开始)** | **配置详情 → [配置流程](#-配置流程智能模式)** | **API 文档 → `http://localhost:8080/docs`**

@@ -113,6 +113,10 @@ class ContentRanker:
         if not time:
             return 0.5
         
+        # 确保时间是 aware 的（带时区信息）
+        if time.tzinfo is None:
+            time = time.replace(tzinfo=timezone.utc)
+        
         age_hours = (now - time).total_seconds() / 3600
         
         if age_hours < 1:

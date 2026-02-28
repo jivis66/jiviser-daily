@@ -80,24 +80,6 @@ AUTH_CONFIGS: Dict[str, AuthConfig] = {
         test_endpoint="https://web.okjike.com/api/users/me",
         expires_days=30
     ),
-    "xiaohongshu": AuthConfig(
-        source_name="xiaohongshu",
-        display_name="小红书",
-        auth_type="cookie",
-        login_url="https://www.xiaohongshu.com",
-        cookie_domains=[".xiaohongshu.com", "www.xiaohongshu.com"],
-        required_headers=["cookie", "user-agent", "referer"],
-        help_text="""
-📖 小红书 Cookie 获取步骤：
-   1. 使用 Chrome/Edge 浏览器登录小红书网页版 (https://www.xiaohongshu.com)
-   2. 按 F12 打开开发者工具，切换到 Network (网络) 标签
-   3. 刷新页面，找到 API 请求（如 /api/sns/web/v1/feed 或 /api/sns/web/v1/user/selfinfo）
-   4. 右键点击请求 → Copy → Copy as cURL (bash)
-   5. 粘贴完整的 cURL 命令
-        """.strip(),
-        test_endpoint="https://edith.xiaohongshu.com/api/sns/web/v1/user/selfinfo",
-        expires_days=7
-    ),
     "zhihu": AuthConfig(
         source_name="zhihu",
         display_name="知乎",
@@ -468,7 +450,7 @@ class AuthManager:
             return False, f"[{config.display_name}] 认证已失效，请更新: auth update {source_name}", None
         
         # 对严格反爬平台，跳过 HTTP 测试（它们有动态签名机制）
-        strict_platforms = ['xiaohongshu', 'douyin']
+        strict_platforms = ['douyin']
         if source_name in strict_platforms:
             # 只验证 cookie 存在且未过期
             try:
@@ -543,14 +525,6 @@ class AuthManager:
                     "username": user.get("screenName"),
                     "user_id": user.get("id"),
                     "avatar": user.get("avatarImage", {}).get("thumbnailUrl")
-                }
-            
-            elif source_name == "xiaohongshu":
-                user = data.get("data", {})
-                return {
-                    "username": user.get("nickname"),
-                    "user_id": user.get("user_id"),
-                    "avatar": user.get("images")
                 }
             
             elif source_name == "zhihu":

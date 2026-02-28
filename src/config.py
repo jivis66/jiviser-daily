@@ -39,10 +39,29 @@ class Settings(BaseSettings):
         description="SQLite数据库路径"
     )
     
-    # ===== LLM 配置 =====
+    # ===== LLM 配置（新版，支持多提供商）=====
+    llm_provider: str = Field(default="openai", description="LLM提供商")
+    llm_api_key: Optional[str] = Field(default=None, description="LLM API密钥")
+    llm_base_url: Optional[str] = Field(default=None, description="LLM API基础URL")
+    llm_model: Optional[str] = Field(default=None, description="默认LLM模型")
+    
+    # 兼容旧版配置
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API密钥")
     openai_base_url: Optional[str] = Field(default=None, description="OpenAI API基础URL")
     openai_model: str = Field(default="gpt-4o-mini", description="默认LLM模型")
+    
+    # ===== LLM 功能开关 =====
+    enable_summary: bool = Field(default=True, description="启用智能摘要")
+    enable_quality_check: bool = Field(default=True, description="启用质量评估")
+    enable_tagging: bool = Field(default=False, description="启用智能标签")
+    enable_recommendation: bool = Field(default=False, description="启用推荐优化")
+    summary_length: str = Field(default="medium", description="摘要长度")
+    
+    # ===== LLM 性能配置 =====
+    llm_max_concurrency: int = Field(default=5, description="LLM 最大并发数")
+    llm_timeout: float = Field(default=30.0, description="LLM 请求超时（秒）")
+    llm_cache_size: int = Field(default=1000, description="LLM 结果缓存大小")
+    llm_batch_mode: bool = Field(default=True, description="启用批量 LLM 模式（一次处理多条）")
     
     # ===== 采集配置 =====
     max_concurrent_collectors: int = Field(default=5, description="最大并发采集数")

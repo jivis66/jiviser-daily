@@ -66,6 +66,32 @@ class ContentItem(BaseModel):
     summary: Optional[str] = Field(default=None, description="摘要")
     key_points: List[str] = Field(default_factory=list, description="关键要点")
     
+    @field_validator("key_points", "topics", "entities", "keywords", mode="before")
+    @classmethod
+    def ensure_list(cls, v):
+        """确保字段总是列表类型"""
+        import json
+        
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            # 尝试解析 JSON 字符串
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                return []
+            except:
+                return []
+        if callable(v):  # 防止内置函数/方法
+            print(f"[ContentItem] 警告: 字段值是 callable 而不是 list，重置为空列表")
+            return []
+        # 其他类型
+        print(f"[ContentItem] 警告: 字段值类型是 {type(v)} 而不是 list，重置为空列表")
+        return []
+    
     # 元数据
     author: Optional[str] = Field(default=None, description="作者")
     publish_time: Optional[datetime] = Field(default=None, description="发布时间")

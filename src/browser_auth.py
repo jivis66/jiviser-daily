@@ -4,7 +4,6 @@
 
 支持平台：
 - 即刻 (jike)
-- 小红书 (xiaohongshu) - 使用专门的 xiaohongshu_auth 模块
 - 知乎 (zhihu)
 - B站 (bilibili)
 - 微博 (weibo)
@@ -199,13 +198,7 @@ class BrowserAuthHelper:
         headers['Sec-Fetch-Site'] = 'same-site'
         
         # 根据平台添加特定 headers
-        if self.source_name == 'xiaohongshu':
-            headers['Referer'] = 'https://www.xiaohongshu.com/'
-            headers['Origin'] = 'https://www.xiaohongshu.com'
-            # 小红书特定的 headers
-            headers['X-Sign'] = ''  # 可能需要动态生成
-            headers['X-Timestamp'] = str(int(asyncio.get_event_loop().time() * 1000))
-        elif self.source_name == 'zhihu':
+        if self.source_name == 'zhihu':
             headers['Referer'] = 'https://www.zhihu.com/'
             headers['x-requested-with'] = 'fetch'
         elif self.source_name == 'jike':
@@ -217,19 +210,8 @@ class BrowserAuthHelper:
     async def _try_get_user_info(self, page) -> Optional[str]:
         """尝试获取用户昵称"""
         try:
-            # 小红书
-            if self.source_name == "xiaohongshu":
-                # 尝试从页面获取用户信息
-                try:
-                    await page.goto("https://www.xiaohongshu.com/user/profile")
-                    await asyncio.sleep(1)
-                    nickname = await page.locator(".nickname").first.text_content(timeout=3000)
-                    return nickname
-                except:
-                    pass
-            
             # 知乎
-            elif self.source_name == "zhihu":
+            if self.source_name == "zhihu":
                 try:
                     await page.goto("https://www.zhihu.com/people/me")
                     await asyncio.sleep(1)
@@ -277,8 +259,6 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
     """
     交互式认证入口
     
-    针对小红书使用专门的 xiaohongshu_auth 模块，提供更好的反检测支持和自动登录检测。
-    
     Args:
         source_name: 渠道名称
         username: 用户名（可选）
@@ -286,11 +266,6 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
     Returns:
         (成功, 消息)
     """
-    # 小红书使用专门的鉴权模块（更好的反检测和自动登录检测）
-    if source_name == "xiaohongshu":
-        return await _xiaohongshu_interactive_auth(username)
-    
-    # 其他平台使用通用认证助手
     helper = BrowserAuthHelper(source_name)
     
     # 获取 cookie
@@ -325,54 +300,6 @@ async def interactive_auth(source_name: str, username: str = None) -> Tuple[bool
         return False, message
 
 
-async def _xiaohongshu_interactive_auth(username: str = None) -> Tuple[bool, str]:
-    """
-    小红书专门的交互式认证
-    
-    使用 xiaohongshu_auth 模块，提供：
-    - 更强的反检测能力
-    - 自动登录检测
-    - 用户信息提取
-    - 更好的错误处理
-    """
-    try:
-        from src.collector.xiaohongshu_auth import XiaohongshuAuthManager
-        
-        manager = XiaohongshuAuthManager()
-        
-        # 执行交互式登录
-        auth_data = await manager.login_interactive(
-            headless=False,
-            timeout=300,
-            on_status=lambda msg: print(f"[小红书登录] {msg}")
-        )
-        
-        if not auth_data:
-            return False, "登录失败或用户取消"
-        
-        # 保存到数据库
-        success = await manager.save_to_database(auth_data)
-        
-        if success:
-            user_info = auth_data.user_info
-            if user_info and user_info.get("nickname"):
-                return True, f"小红书认证成功！用户: {user_info['nickname']}"
-            else:
-                return True, "小红书认证成功！"
-        else:
-            return False, "登录成功但保存失败"
-            
-    except ImportError as e:
-        return False, (
-            f"小红书认证模块加载失败: {e}\n"
-            "请确保已安装 playwright:\n"
-            "  pip install playwright\n"
-            "  python -m playwright install chromium"
-        )
-    except Exception as e:
-        return False, f"小红书认证失败: {str(e)}"
-
-
 # 便捷函数
 def is_browser_auth_available() -> bool:
     """检查浏览器认证是否可用（Playwright 是否已安装）"""
@@ -381,15 +308,3 @@ def is_browser_auth_available() -> bool:
         return True
     except ImportError:
         return False
-
-
-async def quick_auth_xiaohongshu() -> Tuple[bool, str]:
-    """
-    小红书快速认证便捷函数
-    
-    非交互式调用，自动执行登录流程。
-    
-    Returns:
-        (成功, 消息)
-    """
-    return await interactive_auth("xiaohongshu")

@@ -21,6 +21,10 @@ console = Console()
 class LLMProvider(Enum):
     """LLM 提供商枚举"""
     OPENAI = "openai"
+    GEMINI = "gemini"
+    MOONSHOT = "moonshot"
+    QWEN = "qwen"
+    GLM = "glm"
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
     AZURE = "azure"
@@ -74,6 +78,86 @@ PROVIDER_CONFIGS: Dict[LLMProvider, LLMProviderConfig] = {
    1. 访问 https://platform.openai.com/api-keys
    2. 登录您的 OpenAI 账号
    3. 点击 "Create new secret key"
+   4. 复制生成的密钥
+        """
+    ),
+    LLMProvider.GEMINI: LLMProviderConfig(
+        key="gemini",
+        display_name="Google Gemini",
+        emoji="🔷",
+        description="Google 出品，多模态能力强",
+        requires_api_key=True,
+        base_url_hint="https://generativelanguage.googleapis.com/v1beta",
+        models=[
+            LLMModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "速度快，适合日常使用", "免费/低价", 1000000, True),
+            LLMModelInfo("gemini-1.5-pro", "Gemini 1.5 Pro", "Google 最强模型", "$1.25 / 1M tokens", 2000000),
+            LLMModelInfo("gemini-1.5-flash", "Gemini 1.5 Flash", "性价比高", "$0.075 / 1M tokens", 1000000),
+        ],
+        help_text="""
+📖 获取 API Key 步骤：
+   1. 访问 https://aistudio.google.com/app/apikey
+   2. 登录 Google 账号
+   3. 点击 "Create API Key"
+   4. 复制生成的密钥
+        """
+    ),
+    LLMProvider.MOONSHOT: LLMProviderConfig(
+        key="moonshot",
+        display_name="Kimi (月之暗面)",
+        emoji="🌙",
+        description="国产长文本专家，中文能力强",
+        requires_api_key=True,
+        base_url_hint="https://api.moonshot.cn/v1",
+        models=[
+            LLMModelInfo("moonshot-v1-8k", "Kimi K1 (8K)", "轻量快速", "按量计费", 8192),
+            LLMModelInfo("moonshot-v1-32k", "Kimi K1 (32K)", "平衡选择", "按量计费", 32768),
+            LLMModelInfo("moonshot-v1-128k", "Kimi K1 (128K)", "长文本专家", "按量计费", 128000, True),
+        ],
+        help_text="""
+📖 获取 API Key 步骤：
+   1. 访问 https://platform.moonshot.cn/
+   2. 注册/登录 Kimi 开放平台账号
+   3. 在 "API Key 管理" 页面创建 Key
+   4. 复制生成的密钥
+        """
+    ),
+    LLMProvider.QWEN: LLMProviderConfig(
+        key="qwen",
+        display_name="通义千问 (阿里)",
+        emoji="🤖",
+        description="中文优化，阿里出品",
+        requires_api_key=True,
+        base_url_hint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        models=[
+            LLMModelInfo("qwen-max", "Qwen Max", "阿里最强模型", "按量计费", 32768, True),
+            LLMModelInfo("qwen-plus", "Qwen Plus", "平衡性能价格", "按量计费", 131072),
+            LLMModelInfo("qwen-turbo", "Qwen Turbo", "高性价比", "按量计费", 65536),
+        ],
+        help_text="""
+📖 获取 API Key 步骤：
+   1. 访问 https://help.aliyun.com/zh/dashscope/
+   2. 注册阿里云账号
+   3. 开通 DashScope 服务
+   4. 创建 API Key
+        """
+    ),
+    LLMProvider.GLM: LLMProviderConfig(
+        key="glm",
+        display_name="智谱 GLM",
+        emoji="🧠",
+        description="中文对话模型，智谱 AI 出品",
+        requires_api_key=True,
+        base_url_hint="https://open.bigmodel.cn/api/paas/v4",
+        models=[
+            LLMModelInfo("glm-4", "GLM-4", "智谱最强模型", "按量计费", 128000, True),
+            LLMModelInfo("glm-4-air", "GLM-4 Air", "高性价比", "按量计费", 128000),
+            LLMModelInfo("glm-4-flash", "GLM-4 Flash", "轻量快速", "按量计费", 128000),
+        ],
+        help_text="""
+📖 获取 API Key 步骤：
+   1. 访问 https://open.bigmodel.cn/
+   2. 注册智谱账号
+   3. 在 "API Keys" 页面创建 Key
    4. 复制生成的密钥
         """
     ),
@@ -159,39 +243,28 @@ PROVIDER_CONFIGS: Dict[LLMProvider, LLMProviderConfig] = {
     ),
     LLMProvider.ALIYUN: LLMProviderConfig(
         key="aliyun",
-        display_name="通义千问 (阿里)",
+        display_name="通义千问 (旧版)",
         emoji="🇨🇳",
-        description="中文优化、国内访问快",
+        description="已迁移到 Qwen 独立配置，请使用新版",
         requires_api_key=True,
         models=[
             LLMModelInfo("qwen-max", "Qwen Max", "阿里最强模型", "按量计费", 32768, True),
-            LLMModelInfo("qwen-plus", "Qwen Plus", "平衡性能价格", "按量计费", 32768),
-            LLMModelInfo("qwen-turbo", "Qwen Turbo", "高性价比", "按量计费", 32768),
         ],
         help_text="""
-📖 通义千问 API Key 获取：
-   1. 访问 https://help.aliyun.com/zh/dashscope/
-   2. 注册阿里云账号
-   3. 开通 DashScope 服务
-   4. 创建 API Key
+⚠️ 提示：建议直接使用 Qwen 配置，支持更多模型选项
         """
     ),
     LLMProvider.ZHIPU: LLMProviderConfig(
         key="zhipu",
-        display_name="智谱 AI",
+        display_name="智谱 AI (旧版)",
         emoji="🇨🇳",
-        description="中文优化、国内访问快",
+        description="已迁移到 GLM 独立配置，请使用新版",
         requires_api_key=True,
         models=[
             LLMModelInfo("glm-4", "GLM-4", "智谱最强模型", "按量计费", 128000, True),
-            LLMModelInfo("glm-4-air", "GLM-4 Air", "高性价比", "按量计费", 128000),
-            LLMModelInfo("glm-4-flash", "GLM-4 Flash", "轻量快速", "按量计费", 128000),
         ],
         help_text="""
-📖 智谱 AI API Key 获取：
-   1. 访问 https://open.bigmodel.cn/
-   2. 注册智谱账号
-   3. 在 "API Keys" 页面创建 Key
+⚠️ 提示：建议直接使用 GLM 配置，支持更多模型选项
         """
     ),
 }
@@ -242,21 +315,45 @@ class LLMConfigManager:
     def _load_from_env(self):
         """从环境变量加载配置"""
         from src.config import get_settings
+        import os
         
         settings = get_settings()
         
-        # 检测提供商
-        if settings.openai_api_key:
+        # 检测提供商（优先检查特定的 LLM_PROVIDER 变量）
+        provider = os.getenv("LLM_PROVIDER", "").lower()
+        
+        if provider:
+            self.config.provider = provider
+            self.config.api_key = os.getenv("LLM_API_KEY", "")
+            self.config.base_url = os.getenv("LLM_BASE_URL", "")
+            self.config.model = os.getenv("LLM_MODEL", "")
+        elif settings.openai_api_key:
+            # 兼容旧版配置方式
             if settings.openai_base_url and "openrouter" in settings.openai_base_url:
                 self.config.provider = "openrouter"
             elif settings.openai_base_url and "azure" in settings.openai_base_url:
                 self.config.provider = "azure"
+            elif settings.openai_base_url and "moonshot" in settings.openai_base_url:
+                self.config.provider = "moonshot"
+            elif settings.openai_base_url and "generativelanguage" in settings.openai_base_url:
+                self.config.provider = "gemini"
+            elif settings.openai_base_url and "bigmodel" in settings.openai_base_url:
+                self.config.provider = "glm"
+            elif settings.openai_base_url and "dashscope" in settings.openai_base_url:
+                self.config.provider = "qwen"
             else:
                 self.config.provider = "openai"
             
             self.config.api_key = settings.openai_api_key
             self.config.base_url = settings.openai_base_url
             self.config.model = settings.openai_model or "gpt-4o-mini"
+        
+        # 加载功能开关配置（从 Settings 读取）
+        self.config.enable_summary = settings.enable_summary
+        self.config.enable_quality_check = settings.enable_quality_check
+        self.config.enable_tagging = settings.enable_tagging
+        self.config.enable_recommendation = settings.enable_recommendation
+        self.config.summary_length = settings.summary_length
     
     def get_current_config(self) -> LLMConfig:
         """获取当前配置"""
@@ -279,16 +376,34 @@ class LLMConfigManager:
         # 更新 LLM 相关配置
         if config.provider == "skip":
             # 删除 LLM 配置
-            for key in ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"]:
+            for key in ["LLM_PROVIDER", "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
+                       "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"]:
                 env_content.pop(key, None)
         else:
-            env_content["OPENAI_API_KEY"] = config.api_key or ""
-            env_content["OPENAI_MODEL"] = config.model or "gpt-4o-mini"
+            # 使用新的配置格式
+            env_content["LLM_PROVIDER"] = config.provider
+            env_content["LLM_API_KEY"] = config.api_key or ""
+            env_content["LLM_MODEL"] = config.model or ""
             
+            if config.base_url:
+                env_content["LLM_BASE_URL"] = config.base_url
+            elif "LLM_BASE_URL" in env_content:
+                del env_content["LLM_BASE_URL"]
+            
+            # 同时保留兼容旧版的配置
+            env_content["OPENAI_API_KEY"] = config.api_key or ""
+            env_content["OPENAI_MODEL"] = config.model or ""
             if config.base_url:
                 env_content["OPENAI_BASE_URL"] = config.base_url
             elif "OPENAI_BASE_URL" in env_content:
                 del env_content["OPENAI_BASE_URL"]
+            
+            # 保存功能开关配置
+            env_content["ENABLE_SUMMARY"] = str(config.enable_summary).lower()
+            env_content["ENABLE_QUALITY_CHECK"] = str(config.enable_quality_check).lower()
+            env_content["ENABLE_TAGGING"] = str(config.enable_tagging).lower()
+            env_content["ENABLE_RECOMMENDATION"] = str(config.enable_recommendation).lower()
+            env_content["SUMMARY_LENGTH"] = config.summary_length
         
         # 写入文件
         with open(self.ENV_FILE_PATH, "w", encoding="utf-8") as f:
@@ -300,7 +415,10 @@ class LLMConfigManager:
             groups = {
                 "服务配置": ["APP_NAME", "DEBUG", "LOG_LEVEL", "HOST", "PORT"],
                 "数据库配置": ["DATABASE_URL"],
-                "LLM 配置": ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"],
+                "LLM 配置": ["LLM_PROVIDER", "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", 
+                            "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"],
+                "LLM 功能开关": ["ENABLE_SUMMARY", "ENABLE_QUALITY_CHECK", "ENABLE_TAGGING", 
+                                "ENABLE_RECOMMENDATION", "SUMMARY_LENGTH"],
                 "采集配置": ["MAX_CONCURRENT_COLLECTORS", "REQUEST_DELAY", "CONTENT_RETENTION_DAYS"],
                 "推送配置": ["DEFAULT_PUSH_TIME", "TIMEZONE"],
                 "Telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
@@ -331,6 +449,10 @@ class LLMConfigManager:
             os.chmod(self.ENV_FILE_PATH, 0o600)
         except Exception:
             pass
+        
+        # 清除 settings 缓存，确保重新加载配置
+        from src.config import get_settings
+        get_settings.cache_clear()
     
     async def test_connection(self, config: Optional[LLMConfig] = None) -> Tuple[bool, str]:
         """测试 LLM 连接"""
@@ -351,19 +473,29 @@ class LLMConfigManager:
         """测试 Ollama 连接"""
         base_url = config.base_url or "http://localhost:11434"
         
+        console.print(f"  [dim]→ 连接地址: {base_url}[/dim]")
+        console.print(f"  [dim]→ 测试模型: {config.model}[/dim]")
+        
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                console.print("  [dim]→ 获取模型列表...[/dim]")
+                
                 # 测试服务是否运行
                 response = await client.get(f"{base_url}/api/tags")
+                console.print(f"  [dim]→ 响应状态: {response.status_code}[/dim]")
+                
                 if response.status_code != 200:
                     return False, f"Ollama 服务返回错误: {response.status_code}"
                 
                 # 检查模型是否存在
                 data = response.json()
                 models = [m.get("name", "") for m in data.get("models", [])]
+                console.print(f"  [dim]→ 已安装模型: {', '.join(models[:5])}[/dim]")
                 
                 if config.model not in models:
                     return False, f"模型 {config.model} 未找到。已安装模型: {', '.join(models[:5])}"
+                
+                console.print("  [dim]→ 测试模型生成...[/dim]")
                 
                 # 简单测试生成
                 test_response = await client.post(
@@ -372,14 +504,18 @@ class LLMConfigManager:
                     timeout=30.0
                 )
                 
+                console.print(f"  [dim]→ 生成测试状态: {test_response.status_code}[/dim]")
+                
                 if test_response.status_code == 200:
                     return True, f"Ollama 连接正常，模型 {config.model} 可用"
                 else:
                     return False, f"模型测试失败: {test_response.status_code}"
                     
-        except httpx.ConnectError:
+        except httpx.ConnectError as e:
+            console.print(f"  [dim]→ 连接失败: {e}[/dim]")
             return False, f"无法连接到 Ollama 服务 ({base_url})，请确认服务已启动"
         except Exception as e:
+            console.print(f"  [dim]→ 异常: {type(e).__name__}: {e}[/dim]")
             return False, f"测试失败: {str(e)}"
     
     async def _test_openai_compatible(self, config: LLMConfig) -> Tuple[bool, str]:
@@ -388,6 +524,10 @@ class LLMConfigManager:
             return False, "未设置 API Key"
         
         base_url = config.base_url or "https://api.openai.com/v1"
+        
+        console.print(f"  [dim]→ 使用 API 地址: {base_url}[/dim]")
+        console.print(f"  [dim]→ 测试模型: {config.model}[/dim]")
+        console.print(f"  [dim]→ 提供商: {config.provider}[/dim]")
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -400,29 +540,51 @@ class LLMConfigManager:
                 else:
                     url = f"{base_url}/chat/completions"
                 
+                console.print(f"  [dim]→ 请求 URL: {url}[/dim]")
+                
+                # 构建请求体
+                request_body = {
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 5
+                }
+                console.print(f"  [dim]→ 请求体: {request_body}[/dim]")
+                console.print("  [dim]→ 发送请求...[/dim]")
+                
                 response = await client.post(
                     url,
                     headers=headers,
-                    json={
-                        "model": config.model,
-                        "messages": [{"role": "user", "content": "Hi"}],
-                        "max_tokens": 5
-                    }
+                    json=request_body
                 )
                 
+                console.print(f"  [dim]→ 响应状态: {response.status_code}[/dim]")
+                
                 if response.status_code == 200:
+                    data = response.json()
+                    if "choices" in data and len(data["choices"]) > 0:
+                        content = data["choices"][0].get("message", {}).get("content", "")
+                        console.print(f"  [dim]→ 响应内容: {content[:50]}...[/dim]")
                     return True, f"API 连接正常，模型 {config.model} 可用"
                 elif response.status_code == 401:
+                    console.print("  [dim]→ 错误: API Key 认证失败[/dim]")
                     return False, "API Key 无效或已过期"
                 elif response.status_code == 404:
+                    console.print(f"  [dim]→ 错误: 模型未找到[/dim]")
+                    console.print(f"  [dim]→ 响应详情: {response.text[:200]}[/dim]")
                     return False, f"模型 {config.model} 不存在"
                 else:
                     error_msg = response.text[:200]
+                    console.print(f"  [dim]→ 错误响应: {error_msg}[/dim]")
                     return False, f"API 错误 ({response.status_code}): {error_msg}"
                     
-        except httpx.ConnectError:
+        except httpx.ConnectError as e:
+            console.print(f"  [dim]→ 连接失败: {e}[/dim]")
             return False, f"无法连接到 API 服务 ({base_url})"
+        except httpx.TimeoutException:
+            console.print("  [dim]→ 请求超时[/dim]")
+            return False, "请求超时，请检查网络连接"
         except Exception as e:
+            console.print(f"  [dim]→ 异常: {type(e).__name__}: {e}[/dim]")
             return False, f"测试失败: {str(e)}"
 
 
@@ -442,7 +604,7 @@ class LLMSetupWizard:
         if provider == LLMProvider.SKIP:
             self.config.provider = "skip"
             self.config.model = ""
-            self._save_and_finish()
+            await self._save_and_finish()
             return
         
         self.config.provider = provider.value
@@ -457,7 +619,7 @@ class LLMSetupWizard:
         await self._configure_features()
         
         # 保存配置
-        self._save_and_finish()
+        await self._save_and_finish()
     
     def _print_welcome(self):
         """打印欢迎信息"""
@@ -467,12 +629,22 @@ class LLMSetupWizard:
             "  • 智能内容摘要生成\n"
             "  • 内容质量评估\n"
             "  • 个性化推荐优化\n\n"
-            "[dim]支持 OpenAI、OpenRouter、Ollama 本地模型等[/dim]",
+            "[dim]支持: OpenAI, Gemini, Kimi, Qwen, GLM, OpenRouter, Ollama 等[/dim]",
             title="LLM 配置",
             border_style="blue"
         ))
         
         Prompt.ask("\n按 Enter 开始配置")
+    
+    # 在向导中显示的提供商（排除 Ollama, Azure, Baidu, 旧版 Aliyun/Zhipu）
+    WIZARD_PROVIDERS = [
+        LLMProvider.OPENAI,
+        LLMProvider.GEMINI,
+        LLMProvider.MOONSHOT,
+        LLMProvider.QWEN,
+        LLMProvider.GLM,
+        LLMProvider.OPENROUTER,
+    ]
     
     async def _select_provider(self) -> LLMProvider:
         """选择 LLM 提供商"""
@@ -482,7 +654,7 @@ class LLMSetupWizard:
         
         console.print("[bold]📝 选择 LLM 提供商：[/bold]\n")
         
-        providers = list(LLMProvider)[:-1]  # 排除 SKIP
+        providers = self.WIZARD_PROVIDERS
         for i, provider in enumerate(providers, 1):
             config = PROVIDER_CONFIGS[provider]
             marker = "★" if i <= 3 else " "
@@ -518,7 +690,7 @@ class LLMSetupWizard:
         if config.requires_api_key:
             console.print("[yellow]⚠️  提示：密钥仅保存在本地 .env 文件，不会上传[/yellow]\n")
             
-            api_key = Prompt.ask(f"请输入 {config.display_name} API Key", password=True)
+            api_key = Prompt.ask(f"请输入 {config.display_name} API Key")
             
             if not api_key or not api_key.strip():
                 console.print("[red]✗ API Key 不能为空[/red]")
@@ -534,52 +706,36 @@ class LLMSetupWizard:
             self.config.api_key = api_key
             console.print("[green]✅ API Key 格式验证通过[/green]\n")
         
-        # Base URL (可选)
-        if provider in [LLMProvider.OPENAI, LLMProvider.OLLAMA]:
-            default_url = config.base_url_hint
-            use_custom = Confirm.ask("是否使用自定义 API 地址？", default=False)
-            if use_custom:
-                custom_url = Prompt.ask("请输入 API 地址", default=default_url)
-                if custom_url != default_url:
-                    self.config.base_url = custom_url
+        # Base URL 配置 - 所有提供商都可自定义
+        default_url = config.base_url_hint or ""
         
-        if provider == LLMProvider.OLLAMA:
-            self.config.base_url = self.config.base_url or config.base_url_hint
+        console.print("\n[bold]📝 配置 API 地址：[/bold]\n")
+        console.print(f"[dim]默认地址: {default_url}[/dim]\n")
         
-        # Azure 特殊配置
-        if provider == LLMProvider.AZURE:
-            self.config.deployment = Prompt.ask("请输入部署名称")
-            self.config.api_version = Prompt.ask("API 版本", default="2024-02-15-preview")
+        custom_url = Prompt.ask("请输入 API 地址", default=default_url)
+        if custom_url and custom_url != default_url:
+            self.config.base_url = custom_url
+        else:
+            self.config.base_url = default_url
         
-        # 百度特殊配置
-        if provider == LLMProvider.BAIDU:
-            self.config.secret_key = Prompt.ask("请输入 Secret Key", password=True)
+        console.print(f"[green]✅ 已配置 API 地址: {self.config.base_url}[/green]")
         
-        # 选择模型
-        console.print("\n[bold]📝 选择默认模型：[/bold]\n")
+        # 输入模型名称
+        console.print("\n[bold]📝 配置模型：[/bold]\n")
         
-        models = config.models
-        for i, model in enumerate(models, 1):
-            marker = "★" if model.recommended else " "
-            console.print(f"   [{marker}] [{i}] {model.name}")
-            console.print(f"       {model.description}")
-            console.print(f"       [dim]价格: {model.price_hint}[/dim]\n")
+        # 显示推荐的模型作为参考
+        console.print("[dim]推荐的模型:[/dim]")
+        for model in config.models[:3]:
+            rec = " ★推荐" if model.recommended else ""
+            console.print(f"  • {model.id} - {model.description}{rec}")
+        console.print("")
         
-        # 默认选择推荐的模型
-        default_choice = 1
-        for i, model in enumerate(models, 1):
-            if model.recommended:
-                default_choice = i
-                break
+        # 让用户自行填入模型名称
+        default_model = config.models[0].id if config.models else ""
+        model_input = Prompt.ask("请输入模型名称", default=default_model)
         
-        model_choice = IntPrompt.ask(
-            "请选择",
-            choices=[str(i) for i in range(1, len(models) + 1)],
-            default=default_choice
-        )
-        
-        self.config.model = models[model_choice - 1].id
-        console.print(f"[green]✅ 已选择模型: {models[model_choice - 1].name}[/green]")
+        self.config.model = model_input.strip()
+        console.print(f"[green]✅ 已配置模型: {self.config.model}[/green]")
         
         return True
     
@@ -594,6 +750,18 @@ class LLMSetupWizard:
         elif provider == LLMProvider.AZURE:
             # Azure key 是 32 位十六进制
             return len(api_key) == 32 and all(c in "0123456789abcdef" for c in api_key.lower())
+        elif provider == LLMProvider.GEMINI:
+            # Gemini key 通常以 AIza 开头
+            return api_key.startswith("AIza") and len(api_key) > 20
+        elif provider == LLMProvider.MOONSHOT:
+            # Moonshot key 通常以 sk- 开头
+            return api_key.startswith("sk-") and len(api_key) > 20
+        elif provider == LLMProvider.QWEN:
+            # Qwen key 通常以 sk- 开头
+            return api_key.startswith("sk-") and len(api_key) > 20
+        elif provider == LLMProvider.GLM:
+            # GLM key 通常是一串较长的字母数字混合
+            return len(api_key) >= 16
         return True  # 其他提供商不做严格验证
     
     async def _configure_features(self):
@@ -633,7 +801,7 @@ class LLMSetupWizard:
         length_choice = IntPrompt.ask("请选择", choices=["1", "2", "3"], default=2)
         self.config.summary_length = {1: "short", 2: "medium", 3: "long"}[length_choice]
     
-    def _save_and_finish(self):
+    async def _save_and_finish(self):
         """保存配置并完成"""
         # 显示配置预览
         console.print("\n[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]")
@@ -682,8 +850,7 @@ class LLMSetupWizard:
         if self.config.provider != "skip":
             console.print("\n[bold]🧪 正在测试 API 连接...[/bold]")
             
-            import asyncio
-            success, message = asyncio.run(self.manager.test_connection(self.config))
+            success, message = await self.manager.test_connection(self.config)
             
             if success:
                 console.print(f"[green]✅ {message}[/green]")

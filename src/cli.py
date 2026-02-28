@@ -4,6 +4,7 @@
 import asyncio
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -146,6 +147,155 @@ def verify():
             console.print(f"  • {col.get('name')} ({len(col.get('sources', []))} 个源)")
     except Exception as e:
         console.print(f"✗ 分栏配置错误: {e}")
+
+
+@cli.command()
+def setup_telegram():
+    """配置 Telegram Bot"""
+    from rich.prompt import Prompt
+    
+    console.print("""
+[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]
+[bold blue]📱 Telegram Bot 配置向导[/bold blue]
+[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]
+
+[bold]步骤 1: 创建 Telegram Bot[/bold]
+
+1. 在 Telegram 中搜索 [@BotFather](https://t.me/botfather)
+2. 发送 /newbot 命令
+3. 按提示输入 Bot 名称和用户名
+4. 复制获得的 Bot Token（格式如: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz）
+""")
+    
+    bot_token = Prompt.ask("请输入 Bot Token").strip()
+    
+    if not bot_token or ":" not in bot_token:
+        console.print("[red]✗ Bot Token 格式不正确[/red]")
+        return
+    
+    console.print("""
+\n[bold]步骤 2: 获取 Chat ID[/bold]
+
+方法一（推荐）:
+1. 在 Telegram 中打开你的 Bot 对话
+2. 发送任意消息（如 /start）
+3. 点击下方按钮自动获取
+""")
+    
+    import httpx
+    
+    # 尝试自动获取 chat_id
+    with console.status("[bold green]尝试自动获取 Chat ID..."):
+        try:
+            response = httpx.get(
+                f"https://api.telegram.org/bot{bot_token}/getUpdates",
+                timeout=10.0
+            )
+            data = response.json()
+            
+            if data.get("ok") and data.get("result"):
+                # 从更新中提取 chat_id
+                chat_ids = set()
+                for update in data["result"]:
+                    if "message" in update:
+                        chat = update["message"].get("chat", {})
+                        chat_id = chat.get("id")
+                        chat_title = chat.get("title") or chat.get("username", "未知")
+                        if chat_id:
+                            chat_ids.add((chat_id, chat_title))
+                    elif "callback_query" in update:
+                        chat = update["callback_query"].get("message", {}).get("chat", {})
+                        chat_id = chat.get("id")
+                        chat_title = chat.get("title") or chat.get("username", "未知")
+                        if chat_id:
+                            chat_ids.add((chat_id, chat_title))
+                
+                if chat_ids:
+                    console.print(f"[green]✓ 发现 {len(chat_ids)} 个对话:[/green]\n")
+                    for i, (cid, title) in enumerate(chat_ids, 1):
+                        console.print(f"  {i}. {title} (ID: {cid})")
+                    
+                    if len(chat_ids) == 1:
+                        chat_id = str(list(chat_ids)[0][0])
+                        console.print(f"\n自动选择: {chat_id}")
+                    else:
+                        chat_id = Prompt.ask("\n请输入要使用的 Chat ID")
+                else:
+                    console.print("[yellow]⚠ 未找到对话记录[/yellow]")
+                    console.print("请先给 Bot 发送一条消息，然后重试")
+                    chat_id = Prompt.ask("或手动输入 Chat ID")
+            else:
+                console.print("[yellow]⚠ 无法自动获取 Chat ID[/yellow]")
+                console.print("请先给 Bot 发送一条消息，然后重试")
+                chat_id = Prompt.ask("或手动输入 Chat ID")
+        
+        except Exception as e:
+            console.print(f"[yellow]⚠ 获取失败: {e}[/yellow]")
+            chat_id = Prompt.ask("请手动输入 Chat ID")
+    
+    if not chat_id:
+        console.print("[red]✗ Chat ID 不能为空[/red]")
+        return
+    
+    # 测试连接
+    console.print("\n[bold]步骤 3: 测试连接[/bold]\n")
+    
+    with console.status("[bold green]正在测试..."):
+        try:
+            response = httpx.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": "🎉 Daily Agent 配置成功！\n\n您将在这里收到每日精选资讯。",
+                    "parse_mode": "HTML"
+                },
+                timeout=10.0
+            )
+            data = response.json()
+            
+            if data.get("ok"):
+                console.print("[green]✓ 连接测试成功！[/green]")
+                console.print("  已发送测试消息到您的 Telegram")
+            else:
+                console.print(f"[red]✗ 测试失败: {data.get('description')}[/red]")
+                if not Confirm.ask("是否仍要保存配置?", default=False):
+                    return
+        
+        except Exception as e:
+            console.print(f"[red]✗ 测试失败: {e}[/red]")
+            if not Confirm.ask("是否仍要保存配置?", default=False):
+                return
+    
+    # 保存配置
+    console.print("\n[bold]步骤 4: 保存配置[/bold]\n")
+    
+    env_path = Path(".env")
+    env_content = {}
+    
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    env_content[key] = value
+    
+    env_content["TELEGRAM_BOT_TOKEN"] = bot_token
+    env_content["TELEGRAM_CHAT_ID"] = chat_id
+    
+    # 写回文件
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write("# =====================================\n")
+        f.write("# Daily Agent 环境变量配置\n")
+        f.write("# =====================================\n\n")
+        
+        for key, value in env_content.items():
+            f.write(f"{key}={value}\n")
+    
+    console.print("[green]✓ 配置已保存到 .env 文件[/green]\n")
+    console.print("[bold]使用命令:[/bold]")
+    console.print("  [cyan]python -m src.cli send telegram[/cyan]  - 发送最新日报到 Telegram")
+    console.print("  [cyan]python -m src.cli send latest[/cyan]    - 发送最新日报（默认渠道）")
 
 
 @cli.command()
@@ -491,7 +641,7 @@ def _auth_add_manual(source_name: str, username: str = None):
             click.echo(f"✓ {message}")
             
             # 对严格反爬平台，跳过 HTTP 测试（避免 406）
-            if source_name in ['xiaohongshu', 'douyin']:
+            if source_name in ['douyin']:
                 click.echo("✓ Cookie 已保存（适合配合浏览器采集器使用）")
             else:
                 click.echo("正在测试...")
@@ -597,25 +747,18 @@ def auth_guide():
     console.print("以下渠道需要登录认证才能采集个性化内容:\n")
     
     for key, config in AUTH_CONFIGS.items():
-        # 小红书显示特殊提示
-        special_note = ""
-        if key == "xiaohongshu":
-            special_note = "\n[green]✨ 支持浏览器自动登录，无需手动复制 Cookie[/green]"
-        
         console.print(Panel(
             f"[bold]{config.display_name}[/bold] ([cyan]{key}[/cyan])\n"
             f"[dim]认证方式:[/dim] {config.auth_type}\n"
-            f"[dim]默认有效期:[/dim] {config.expires_days} 天"
-            f"{special_note}\n\n"
+            f"[dim]默认有效期:[/dim] {config.expires_days} 天\n\n"
             f"{config.help_text}",
             border_style="green"
         ))
     
     console.print("\n[bold]常用命令:[/bold]")
-    console.print("  [cyan]python -m src.cli auth list[/cyan]              - 查看已配置的认证")
-    console.print("  [cyan]python -m src.cli auth add jike[/cyan]           - 添加即刻认证")
-    console.print("  [cyan]python -m src.cli auth add xiaohongshu -b[/cyan] - 小红书浏览器自动登录")
-    console.print("  [cyan]python -m src.cli auth test jike[/cyan]          - 测试即刻认证")
+    console.print("  [cyan]python -m src.cli auth list[/cyan]     - 查看已配置的认证")
+    console.print("  [cyan]python -m src.cli auth add jike[/cyan] - 添加即刻认证")
+    console.print("  [cyan]python -m src.cli auth test jike[/cyan] - 测试即刻认证")
 
 
 # ============ 启动设置向导命令 ============
@@ -643,6 +786,7 @@ def setup(ctx, all_modules: bool, module_name: str, mode: str, template: str):
             return
         
         elif mode == "configure" or all_modules or module_name:
+            from src.setup_wizard import SetupWizard
             wizard = SetupWizard()
             
             if all_modules:
@@ -666,6 +810,7 @@ def setup(ctx, all_modules: bool, module_name: str, mode: str, template: str):
             return
         
         # 默认运行完整向导
+        from src.setup_wizard import SetupWizard
         wizard = SetupWizard()
         await wizard.run_full_setup()
     
@@ -749,6 +894,16 @@ def setup_templates():
     
     console.print("\n[bold]使用模板快速设置：[/bold]")
     console.print("  [cyan]python -m src.cli setup wizard[/cyan]  - 启动向导并选择模板")
+
+
+@setup.command("expert")
+def setup_expert():
+    """专家模式 - LLM 辅助配置（推荐深度定制用户）"""
+    async def _expert():
+        from src.expert_setup import run_expert_setup
+        await run_expert_setup()
+
+    asyncio.run(_expert())
 
 
 # ============ LLM 配置命令 ============
@@ -1407,7 +1562,7 @@ def test_source(source_name: str):
     """测试单个数据源"""
     async def _test():
         from src.config import get_column_config
-        from src.collector import CollectorManager, RSSCollector, HackerNewsCollector, BilibiliCollector, XiaohongshuCollector
+        from src.collector import CollectorManager, RSSCollector, HackerNewsCollector, BilibiliCollector
         
         console.print(f"[bold]测试数据源: {source_name}[/bold]\n")
         
@@ -1448,8 +1603,6 @@ def test_source(source_name: str):
                     return
             elif source_type == "bilibili":
                 collector = BilibiliCollector(source_name, source_config)
-            elif source_type == "xiaohongshu":
-                collector = XiaohongshuCollector(source_name, source_config)
             else:
                 console.print(f"[red]✗ 不支持的采集器类型: {source_type}[/red]")
                 return
@@ -1751,6 +1904,171 @@ def preview():
         console.print("运行 [cyan]python -m src.cli generate[/cyan] 生成正式日报")
     
     asyncio.run(_preview())
+
+
+# ============ 发送日报命令 ============
+
+@cli.group()
+def send():
+    """发送日报到指定渠道"""
+    pass
+
+
+@send.command("telegram")
+@click.option("--report-id", "-r", help="日报 ID（默认最新）")
+@click.option("--preview", "-p", is_flag=True, help="预览模式（不实际发送）")
+def send_telegram(report_id: str, preview: bool):
+    """发送日报到 Telegram"""
+    async def _send():
+        from datetime import datetime, timezone
+        from sqlalchemy.ext.asyncio import AsyncSession
+        from src.database import get_session, DailyReportRepository
+        from src.models import DailyReport, ChannelType
+        from src.service import DailyAgentService
+        from src.config import get_settings
+        
+        settings = get_settings()
+        
+        # 检查配置
+        if not settings.telegram_bot_token or not settings.telegram_chat_id:
+            console.print("[red]✗ Telegram 配置缺失[/red]\n")
+            console.print("请设置以下环境变量:")
+            console.print("  [cyan]TELEGRAM_BOT_TOKEN[/cyan]=your-bot-token")
+            console.print("  [cyan]TELEGRAM_CHAT_ID[/cyan]=your-chat-id\n")
+            console.print("获取方法:")
+            console.print("  1. 在 Telegram 搜索 @BotFather 创建 Bot，获取 Token")
+            console.print("  2. 发送 /start 给 Bot")
+            console.print("  3. 访问 https://api.telegram.org/bot<TOKEN>/getUpdates 获取 Chat ID")
+            return
+        
+        # 初始化服务
+        service = DailyAgentService()
+        await service.initialize()
+        
+        # 获取日报
+        if report_id:
+            async with get_session() as session:
+                repo = DailyReportRepository(session)
+                db_report = await repo.get_by_id(report_id)
+                if not db_report:
+                    console.print(f"[red]✗ 日报不存在: {report_id}[/red]")
+                    return
+                report = DailyReport(
+                    id=db_report.id,
+                    date=db_report.date,
+                    user_id=db_report.user_id,
+                    title=db_report.title,
+                    total_items=db_report.total_items
+                )
+        else:
+            # 获取最新日报
+            async with get_session() as session:
+                repo = DailyReportRepository(session)
+                db_report = await repo.get_by_date("default", datetime.now(timezone.utc))
+                if not db_report:
+                    console.print("[red]✗ 没有找到日报[/red]")
+                    console.print("\n请先运行: [cyan]python -m src.cli generate[/cyan]")
+                    return
+                report = DailyReport(
+                    id=db_report.id,
+                    date=db_report.date,
+                    user_id=db_report.user_id,
+                    title=db_report.title,
+                    total_items=db_report.total_items
+                )
+        
+        console.print(f"[bold]发送日报到 Telegram[/bold]\n")
+        console.print(f"日报: {report.title}")
+        console.print(f"日期: {report.date.strftime('%Y-%m-%d')}")
+        console.print(f"条目: {report.total_items} 条\n")
+        
+        if preview:
+            console.print("[yellow]预览模式 - 未实际发送[/yellow]")
+            return
+        
+        # 发送
+        with console.status("[bold green]正在发送..."):
+            results = await service.push_report(report, [ChannelType.TELEGRAM.value])
+        
+        result = results.get(ChannelType.TELEGRAM)
+        if result and result.success:
+            console.print(f"[green]✓ 发送成功！[/green]")
+            console.print(f"  {result.message}")
+        else:
+            console.print(f"[red]✗ 发送失败[/red]")
+            if result:
+                console.print(f"  错误: {result.message}")
+    
+    asyncio.run(_send())
+
+
+@send.command("latest")
+@click.option("--channel", "-c", default="telegram", type=click.Choice(["telegram", "slack", "discord", "email"]), help="目标渠道")
+def send_latest(channel: str):
+    """发送最新日报到指定渠道"""
+    async def _send():
+        from datetime import datetime, timezone
+        from src.database import get_session, DailyReportRepository
+        from src.models import DailyReport, ChannelType
+        from src.service import DailyAgentService
+        
+        # 初始化服务
+        service = DailyAgentService()
+        await service.initialize()
+        
+        # 获取最新日报
+        async with get_session() as session:
+            repo = DailyReportRepository(session)
+            db_report = await repo.get_by_date("default", datetime.now(timezone.utc))
+            if not db_report:
+                console.print("[red]✗ 没有找到日报[/red]")
+                console.print("\n请先运行: [cyan]python -m src.cli generate[/cyan]")
+                return
+            report = DailyReport(
+                id=db_report.id,
+                date=db_report.date,
+                user_id=db_report.user_id,
+                title=db_report.title,
+                total_items=db_report.total_items
+            )
+        
+        # 映射渠道
+        channel_map = {
+            "telegram": ChannelType.TELEGRAM,
+            "slack": ChannelType.SLACK,
+            "discord": ChannelType.DISCORD,
+            "email": ChannelType.EMAIL,
+        }
+        
+        channel_type = channel_map.get(channel)
+        
+        console.print(f"[bold]发送日报到 {channel.upper()}[/bold]\n")
+        console.print(f"日报: {report.title}")
+        console.print(f"日期: {report.date.strftime('%Y-%m-%d')}\n")
+        
+        with console.status(f"[bold green]正在发送到 {channel}..."):
+            results = await service.push_report(report, [channel_type.value])
+        
+        result = results.get(channel_type)
+        if result and result.success:
+            console.print(f"[green]✓ 发送成功！[/green]")
+            console.print(f"  {result.message}")
+        else:
+            console.print(f"[red]✗ 发送失败[/red]")
+            if result:
+                console.print(f"  错误: {result.message}")
+    
+    asyncio.run(_send())
+
+
+@cli.command(name="expert")
+def expert_setup():
+    """专家模式 - LLM 辅助配置（推荐）"""
+    async def _expert():
+        from src.expert_setup import run_expert_setup
+        await run_expert_setup()
+
+    asyncio.run(_expert())
 
 
 if __name__ == "__main__":

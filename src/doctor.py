@@ -71,12 +71,9 @@ class SystemChecker:
         py_version = sys.version_info
         py_version_str = f"{py_version.major}.{py_version.minor}.{py_version.micro}"
         
-        if py_version < (3, 10):
+        if py_version < (3, 11):
             status = "error"
-            message = f"Python {py_version_str} (需要 >= 3.10)"
-        elif py_version < (3, 11):
-            status = "warning"
-            message = f"Python {py_version_str} (建议 >= 3.11)"
+            message = f"Python {py_version_str} (需要 >= 3.11)"
         else:
             status = "ok"
             message = f"Python {py_version_str}"
@@ -320,7 +317,7 @@ class SystemChecker:
                 source_name = source.get("name", "unnamed")
                 
                 # 检查需要认证的源
-                if source_type in ["xiaohongshu", "jike", "zhihu"]:
+                if source_type in ["jike", "zhihu"]:
                     auth_sources.append(source_name)
         
         details.append(f"配置数据源: {total_sources} 个")
@@ -337,7 +334,7 @@ class SystemChecker:
                 for source_name in auth_sources:
                     # 简化匹配逻辑
                     source_key = None
-                    for key in ["xiaohongshu", "jike", "zhihu"]:
+                    for key in ["jike", "zhihu"]:
                         if key in source_name.lower():
                             source_key = key
                             break

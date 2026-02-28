@@ -33,7 +33,7 @@ class AuthenticatedCollector(BaseCollector):
     """
     带认证的采集器基类
     
-    用于需要登录认证的信息渠道（如即刻、小红书、知乎等）
+    用于需要登录认证的信息渠道（如即刻、知乎等）
     """
     
     def __init__(self, name: str, source_type: SourceType, config: Optional[Dict] = None):
@@ -326,80 +326,6 @@ class JikeAuthenticatedCollector(AuthenticatedCollector):
             return datetime.fromisoformat(ts.replace("Z", "+00:00"))
         except Exception:
             return None
-
-
-class XiaohongshuAuthenticatedCollector(AuthenticatedCollector):
-    """
-    小红书认证采集器
-    
-    采集用户关注流和推荐内容
-    """
-    
-    def __init__(self, config: Optional[Dict] = None):
-        super().__init__("xiaohongshu_feed", SourceType.SOCIAL, config)
-        self.auth_source = "xiaohongshu"
-        self.api_base = "https://edith.xiaohongshu.com"
-    
-    async def collect_with_auth(self) -> CollectorResult:
-        """采集小红书关注流"""
-        items = []
-        
-        try:
-            # 获取关注流
-            response = await self.fetch_with_auth(
-                f"{self.api_base}/api/sns/web/v1/feed",
-                method="POST",
-                json={"cursor": "", "feed_type": "following"},
-                extra_headers={
-                    "Content-Type": "application/json",
-                    "Referer": "https://www.xiaohongshu.com/",
-                    "Origin": "https://www.xiaohongshu.com",
-                    "X-S": "",  # 可能需要动态生成
-                    "X-T": ""
-                }
-            )
-            
-            data = response.json()
-            notes = data.get("data", {}).get("items", [])
-            
-            for note in notes:
-                note_card = note.get("note_card", {})
-                user = note_card.get("user", {})
-                
-                title = note_card.get("title", "") or note_card.get("desc", "")[:50]
-                if not title:
-                    title = f"来自 {user.get('nickname', '未知用户')} 的笔记"
-                
-                item = self.create_content_item(
-                    title=title,
-                    url=f"https://www.xiaohongshu.com/explore/{note_card.get('note_id', '')}",
-                    content=note_card.get("desc", ""),
-                    author=user.get("nickname"),
-                    image_url=note_card.get("cover", {}).get("url", ""),
-                    extra={
-                        "likes": note_card.get("interact_info", {}).get("liked_count", 0),
-                        "source": "小红书",
-                        "user_id": user.get("user_id", ""),
-                        "tags": [tag.get("name", "") for tag in note_card.get("tag_list", [])]
-                    }
-                )
-                
-                if self.should_include(item):
-                    items.append(item)
-            
-            return CollectorResult(
-                success=True,
-                items=items,
-                total_found=len(notes),
-                total_filtered=len(notes) - len(items)
-            )
-            
-        except Exception as e:
-            return CollectorResult(
-                success=False,
-                message=f"小红书采集失败: {str(e)}",
-                items=items
-            )
 
 
 class ZhihuAuthenticatedCollector(AuthenticatedCollector):

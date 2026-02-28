@@ -115,16 +115,6 @@ china_video:
       limit: 10
     weight: 0.6
 
-  # 小红书 - 生活方式/职场经验
-  xiaohongshu:
-    enabled: true
-    collector: XiaohongshuCollector
-    config:
-      collect_type: "hot"  # 可选: hot, search
-      # keyword: "职场"
-      limit: 10
-    weight: 0.7
-
   # 视频号 - 微信生态
   wechat_channels:
     enabled: false  # 采集困难，建议通过 RSS

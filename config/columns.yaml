@@ -1,6 +1,6 @@
 # =====================================
-# 日报分栏配置
-# 可根据需要自定义分栏和数据源
+# 日报分栏配置 - 中国用户优化版
+# 包含更多中国大陆信息源
 # =====================================
 
 columns:
@@ -8,24 +8,23 @@ columns:
     name: "🔥 今日头条"
     description: "当日最重要的科技新闻"
     enabled: true
-    max_items: 5
+    max_items: 6
     order: 1
     sources:
       - type: "rss"
-        name: "TechCrunch"
-        url: "https://techcrunch.com/feed/"
-        weight: 1.0
-        filter:
-          keywords: ["AI", "人工智能", "大模型", "LLM", "OpenAI", "startup"]
-          exclude: ["广告", "sponsored"]
-      
-      - type: "rss"
         name: "36氪"
         url: "https://36kr.com/feed"
+        weight: 1.0
+        filter:
+          keywords: ["科技", "AI", "融资", "创业", "人工智能"]
+
+      - type: "rss"
+        name: "虎嗅"
+        url: "https://www.huxiu.com/rss/0.xml"
         weight: 0.9
         filter:
-          keywords: ["科技", "AI", "融资", "创业"]
-      
+          keywords: ["科技", "AI", "互联网", "商业"]
+
       - type: "api"
         name: "Hacker News"
         provider: "hackernews"
@@ -33,25 +32,77 @@ columns:
         weight: 0.8
         filter:
           min_score: 100
-    
+
+      - type: "rss"
+        name: "雷锋网-AI"
+        url: "https://www.leiphone.com/category/ai/rss"
+        weight: 0.85
+        filter:
+          keywords: ["AI", "人工智能", "大模型", "机器学习"]
+
     organization:
       sort_by: "relevance"
       dedup_strategy: "semantic"
       summarize: "3_points"
       highlight_key_info: true
 
+  - id: "china_tech"
+    name: "🇨🇳 国内科技"
+    description: "中国科技公司动态、产品发布、行业分析"
+    enabled: true
+    max_items: 6
+    order: 2
+    sources:
+      - type: "web"
+        name: "稀土掘金"
+        provider: "juejin"
+        category: "all"
+        limit: 5
+        weight: 1.0
+        filter:
+          keywords: ["前端", "后端", "AI", "开源", "架构"]
+
+      - type: "rss"
+        name: "极客公园"
+        url: "https://www.geekpark.net/rss"
+        weight: 0.9
+        filter:
+          keywords: ["产品", "科技", "创新"]
+
+      - type: "rss"
+        name: "品玩"
+        url: "https://www.pingwest.com/feed"
+        weight: 0.85
+
+      - type: "web"
+        name: "开源中国"
+        provider: "oschina"
+        feed_type: "news"
+        weight: 0.8
+
+      - type: "web"
+        name: "InfoQ中文"
+        provider: "infoq_cn"
+        category: "ai-ml"
+        weight: 0.75
+
+    organization:
+      sort_by: "time"
+      dedup_strategy: "semantic"
+      summarize: "3_points"
+
   - id: "tech"
     name: "💻 技术前沿"
-    description: "技术文章、开源项目、编程语言"
+    description: "编程技术、开源项目、开发工具"
     enabled: true
     max_items: 8
-    order: 2
+    order: 3
     sources:
       - type: "rss"
         name: "GitHub Blog"
         url: "https://github.blog/feed/"
         weight: 1.0
-      
+
       - type: "api"
         name: "GitHub Trending"
         provider: "github"
@@ -61,19 +112,30 @@ columns:
           q: "stars:>100 created:>2024-01-01"
           sort: "stars"
           order: "desc"
-      
-      - type: "rss"
-        name: "arXiv AI"
-        url: "http://export.arxiv.org/rss/cs.AI"
-        weight: 0.8
+
+      - type: "web"
+        name: "V2EX"
+        provider: "v2ex"
+        node: "python"
+        limit: 5
+        weight: 0.85
         filter:
-          keywords: ["LLM", "transformer", "GPT", "language model"]
-      
+          keywords: ["Python", "AI", "后端"]
+
+      - type: "web"
+        name: "思否"
+        provider: "segmentfault"
+        tag: "python"
+        limit: 3
+        weight: 0.8
+
       - type: "rss"
-        name: "Dev.to"
-        url: "https://dev.to/feed"
-        weight: 0.7
-    
+        name: "arXiv CS.SE"
+        url: "http://export.arxiv.org/rss/cs.SE"
+        weight: 0.75
+        filter:
+          keywords: ["software", "engineering", "architecture"]
+
     organization:
       sort_by: "time"
       group_by: "topic"
@@ -82,27 +144,36 @@ columns:
 
   - id: "ai_research"
     name: "🧠 AI 研究"
-    description: "AI 论文、研究成果"
+    description: "AI 论文、研究成果、技术突破"
     enabled: true
     max_items: 5
-    order: 3
+    order: 4
     sources:
       - type: "rss"
         name: "arXiv CS.CL"
         url: "http://export.arxiv.org/rss/cs.CL"
         weight: 1.0
-      
+        filter:
+          keywords: ["LLM", "transformer", "GPT", "language model"]
+
       - type: "rss"
-        name: "Papers With Code"
-        url: "https://paperswithcode.com/rss"
-        weight: 0.9
-      
+        name: "机器之心"
+        url: "https://www.jiqizhixin.com/rss"
+        weight: 0.95
+        filter:
+          keywords: ["AI", "深度学习", "大模型"]
+
+      - type: "rss"
+        name: "Paper Weekly"
+        url: "https://rsshub.app/papers/arxiv/CS.CL"
+        weight: 0.85
+
       - type: "api"
         name: "Hugging Face"
         provider: "huggingface"
         endpoint: "https://huggingface.co/api/datasets"
         weight: 0.7
-    
+
     organization:
       sort_by: "time"
       dedup_strategy: "semantic"
@@ -113,20 +184,37 @@ columns:
     description: "商业新闻、市场分析、投融资"
     enabled: true
     max_items: 5
-    order: 4
+    order: 5
     sources:
-      - type: "rss"
-        name: "福布斯"
-        url: "https://www.forbes.com/business/feed/"
+      - type: "web"
+        name: "华尔街见闻"
+        provider: "wallstreetcn"
+        category: "hot"
         weight: 0.9
         filter:
-          keywords: ["科技", "startup", "VC", "融资"]
-      
+          keywords: ["科技", "互联网", "AI", "融资"]
+
+      - type: "web"
+        name: "雪球"
+        provider: "xueqiu"
+        category: "hot"
+        limit: 5
+        weight: 0.85
+        filter:
+          keywords: ["科技", "AI", "新能源"]
+
       - type: "rss"
-        name: "Bloomberg"
-        url: "https://feeds.bloomberg.com/business/news.rss"
+        name: "新浪财经"
+        url: "https://feed.sina.com.cn/tech/rollnews/doclist.xml"
         weight: 0.8
-    
+        filter:
+          keywords: ["科技", "创业", "融资"]
+
+      - type: "rss"
+        name: "网易科技"
+        url: "https://tech.163.com/special/000944N7/rss_digi.xml"
+        weight: 0.75
+
     organization:
       sort_by: "time"
       dedup_strategy: "exact"
@@ -134,22 +222,35 @@ columns:
 
   - id: "deep_dive"
     name: "📚 深度阅读"
-    description: "深度文章、长文分析"
+    description: "深度文章、长文分析、技术博客"
     enabled: true
-    max_items: 3
-    order: 5
+    max_items: 4
+    order: 6
     schedule: "weekly"
     sources:
       - type: "rss"
         name: "Wait But Why"
         url: "https://waitbutwhy.com/feed"
         weight: 1.0
-      
+
       - type: "rss"
         name: "Stratechery"
         url: "https://stratechery.com/feed/"
         weight: 0.9
-    
+
+      - type: "web"
+        name: "InfoQ深度"
+        provider: "infoq_cn"
+        category: "architecture"
+        weight: 0.85
+
+      - type: "web"
+        name: "掘金深度"
+        provider: "juejin"
+        category: "all"
+        limit: 3
+        weight: 0.8
+
     organization:
       sort_by: "time"
       dedup_strategy: "exact"
@@ -159,8 +260,8 @@ columns:
     name: "📺 视频内容"
     description: "B站热门视频、技术分享"
     enabled: true
-    max_items: 5
-    order: 6
+    max_items: 4
+    order: 7
     sources:
       - type: "bilibili"
         name: "B站热门"
@@ -170,7 +271,7 @@ columns:
         weight: 1.0
         filter:
           keywords: ["科技", "编程", "AI", "教程", "干货"]
-      
+
       - type: "bilibili"
         name: "B站科技区"
         provider: "bilibili"
@@ -178,41 +279,101 @@ columns:
         keyword: "科技前沿"
         limit: 3
         weight: 0.8
-    
+
     organization:
       sort_by: "time"
       dedup_strategy: "exact"
       summarize: "3_points"
 
-  - id: "social_content"
-    name: "📱 社交精选"
-    description: "小红书精选笔记、生活分享"
+  - id: "tools_lifestyle"
+    name: "🛠️ 效率工具"
+    description: "数字工具、效率应用、生活方式"
     enabled: true
-    max_items: 5
-    order: 7
+    max_items: 6
+    order: 8
     sources:
-      - type: "xiaohongshu"
-        name: "小红书科技"
-        provider: "xiaohongshu"
-        collect_type: "search"
-        keyword: "科技数码"
-        limit: 3
+      - type: "rss"
+        name: "少数派"
+        url: "https://sspai.com/feed"
         weight: 1.0
         filter:
-          keywords: ["数码", "科技", "评测", "体验"]
-      
-      - type: "xiaohongshu"
-        name: "小红书职场"
-        provider: "xiaohongshu"
-        collect_type: "search"
-        keyword: "职场干货"
-        limit: 3
+          keywords: ["效率", "工具", "macOS", "iOS", "Android", "Windows"]
+
+      - type: "rss"
+        name: "少数派社区"
+        url: "https://sspai.com/feed/matrix"
+        weight: 0.9
+        filter:
+          keywords: ["工作流", "效率", "应用"]
+
+      - type: "rss"
+        name: "爱范儿"
+        url: "https://www.ifanr.com/feed"
+        weight: 0.85
+        filter:
+          keywords: ["科技", "数码", "生活"]
+
+      - type: "rss"
+        name: "AppSo"
+        url: "https://www.ifanr.com/app/feed"
         weight: 0.8
-    
+        filter:
+          keywords: ["应用", "iOS", "Android", "App"]
+
+      - type: "rss"
+        name: "小众软件"
+        url: "https://www.appinn.com/feed/"
+        weight: 0.85
+        filter:
+          keywords: ["软件", "工具", "免费", "开源"]
+
+      - type: "rss"
+        name: "利器"
+        url: "https://liqi.io/feed/"
+        weight: 0.75
+
+      - type: "rss"
+        name: "数字尾巴"
+        url: "https://www.dgtle.com/rss/dgtle.xml"
+        weight: 0.7
+        filter:
+          keywords: ["数码", "评测", "生活方式"]
+
+    organization:
+      sort_by: "relevance"
+      dedup_strategy: "exact"
+      summarize: "3_points"
+
+  - id: "devops"
+    name: "⚙️ DevOps/云原生"
+    description: "Linux、Docker、K8s、运维"
+    enabled: false
+    max_items: 4
+    order: 9
+    sources:
+      - type: "web"
+        name: "Linux中国"
+        provider: "chinaunix"
+        weight: 0.9
+
+      - type: "web"
+        name: "开源中国DevOps"
+        provider: "oschina"
+        feed_type: "news"
+        weight: 0.85
+        filter:
+          keywords: ["Docker", "Kubernetes", "K8s", "DevOps"]
+
+      - type: "web"
+        name: "InfoQ架构"
+        provider: "infoq_cn"
+        category: "architecture"
+        weight: 0.8
+
     organization:
       sort_by: "time"
       dedup_strategy: "exact"
-      summarize: "3_points"
+      summarize: "paragraph"
 
 # ===== 智能组合规则 =====
 composition_rules:
@@ -220,13 +381,13 @@ composition_rules:
   source_diversity:
     max_ratio_per_source: 0.4
     min_source_count: 2
-  
+
   # 时间分布：优先最新内容，但保留重要旧闻
   time_distribution:
     recency_weight: 0.7
     importance_weight: 0.3
     max_age_hours: 48
-  
+
   # 主题覆盖：确保主题多样性
   topic_coverage:
     min_topics: 3
