@@ -3,7 +3,8 @@
 """
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -53,7 +54,7 @@ def push(report_id: str, channel: tuple):
         service = DailyAgentService()
         await service.initialize()
         
-        async for session in get_session():
+        async with get_session() as session:
             repo = DailyReportRepository(session)
             db_report = await repo.get_by_id(report_id)
             
@@ -75,8 +76,6 @@ def push(report_id: str, channel: tuple):
             for ch, result in results.items():
                 status = "[green]✓[/green]" if result.success else "[red]✗[/red]"
                 console.print(f"{status} {ch}: {result.message}")
-            
-            break
     
     asyncio.run(_push())
 
@@ -151,11 +150,161 @@ def verify():
 
 
 @cli.command()
+def setup_telegram():
+    """配置 Telegram Bot"""
+    from rich.prompt import Prompt
+    
+    console.print("""
+[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]
+[bold blue]📱 Telegram Bot 配置向导[/bold blue]
+[bold blue]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold blue]
+
+[bold]步骤 1: 创建 Telegram Bot[/bold]
+
+1. 在 Telegram 中搜索 [@BotFather](https://t.me/botfather)
+2. 发送 /newbot 命令
+3. 按提示输入 Bot 名称和用户名
+4. 复制获得的 Bot Token（格式如: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz）
+""")
+    
+    bot_token = Prompt.ask("请输入 Bot Token").strip()
+    
+    if not bot_token or ":" not in bot_token:
+        console.print("[red]✗ Bot Token 格式不正确[/red]")
+        return
+    
+    console.print("""
+\n[bold]步骤 2: 获取 Chat ID[/bold]
+
+方法一（推荐）:
+1. 在 Telegram 中打开你的 Bot 对话
+2. 发送任意消息（如 /start）
+3. 点击下方按钮自动获取
+""")
+    
+    import httpx
+    
+    # 尝试自动获取 chat_id
+    with console.status("[bold green]尝试自动获取 Chat ID..."):
+        try:
+            response = httpx.get(
+                f"https://api.telegram.org/bot{bot_token}/getUpdates",
+                timeout=10.0
+            )
+            data = response.json()
+            
+            if data.get("ok") and data.get("result"):
+                # 从更新中提取 chat_id
+                chat_ids = set()
+                for update in data["result"]:
+                    if "message" in update:
+                        chat = update["message"].get("chat", {})
+                        chat_id = chat.get("id")
+                        chat_title = chat.get("title") or chat.get("username", "未知")
+                        if chat_id:
+                            chat_ids.add((chat_id, chat_title))
+                    elif "callback_query" in update:
+                        chat = update["callback_query"].get("message", {}).get("chat", {})
+                        chat_id = chat.get("id")
+                        chat_title = chat.get("title") or chat.get("username", "未知")
+                        if chat_id:
+                            chat_ids.add((chat_id, chat_title))
+                
+                if chat_ids:
+                    console.print(f"[green]✓ 发现 {len(chat_ids)} 个对话:[/green]\n")
+                    for i, (cid, title) in enumerate(chat_ids, 1):
+                        console.print(f"  {i}. {title} (ID: {cid})")
+                    
+                    if len(chat_ids) == 1:
+                        chat_id = str(list(chat_ids)[0][0])
+                        console.print(f"\n自动选择: {chat_id}")
+                    else:
+                        chat_id = Prompt.ask("\n请输入要使用的 Chat ID")
+                else:
+                    console.print("[yellow]⚠ 未找到对话记录[/yellow]")
+                    console.print("请先给 Bot 发送一条消息，然后重试")
+                    chat_id = Prompt.ask("或手动输入 Chat ID")
+            else:
+                console.print("[yellow]⚠ 无法自动获取 Chat ID[/yellow]")
+                console.print("请先给 Bot 发送一条消息，然后重试")
+                chat_id = Prompt.ask("或手动输入 Chat ID")
+        
+        except Exception as e:
+            console.print(f"[yellow]⚠ 获取失败: {e}[/yellow]")
+            chat_id = Prompt.ask("请手动输入 Chat ID")
+    
+    if not chat_id:
+        console.print("[red]✗ Chat ID 不能为空[/red]")
+        return
+    
+    # 测试连接
+    console.print("\n[bold]步骤 3: 测试连接[/bold]\n")
+    
+    with console.status("[bold green]正在测试..."):
+        try:
+            response = httpx.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": "🎉 Daily Agent 配置成功！\n\n您将在这里收到每日精选资讯。",
+                    "parse_mode": "HTML"
+                },
+                timeout=10.0
+            )
+            data = response.json()
+            
+            if data.get("ok"):
+                console.print("[green]✓ 连接测试成功！[/green]")
+                console.print("  已发送测试消息到您的 Telegram")
+            else:
+                console.print(f"[red]✗ 测试失败: {data.get('description')}[/red]")
+                if not Confirm.ask("是否仍要保存配置?", default=False):
+                    return
+        
+        except Exception as e:
+            console.print(f"[red]✗ 测试失败: {e}[/red]")
+            if not Confirm.ask("是否仍要保存配置?", default=False):
+                return
+    
+    # 保存配置
+    console.print("\n[bold]步骤 4: 保存配置[/bold]\n")
+    
+    env_path = Path(".env")
+    env_content = {}
+    
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    env_content[key] = value
+    
+    env_content["TELEGRAM_BOT_TOKEN"] = bot_token
+    env_content["TELEGRAM_CHAT_ID"] = chat_id
+    
+    # 写回文件
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write("# =====================================\n")
+        f.write("# Daily Agent 环境变量配置\n")
+        f.write("# =====================================\n\n")
+        
+        for key, value in env_content.items():
+            f.write(f"{key}={value}\n")
+    
+    console.print("[green]✓ 配置已保存到 .env 文件[/green]\n")
+    console.print("[bold]使用命令:[/bold]")
+    console.print("  [cyan]python -m src.cli send telegram[/cyan]  - 发送最新日报到 Telegram")
+    console.print("  [cyan]python -m src.cli send latest[/cyan]    - 发送最新日报（默认渠道）")
+
+
+@cli.command()
 @click.option("--mode", "-m", type=click.Choice(["fast", "configure"]), help="启动模式")
 @click.option("--template", "-t", help="使用预设模板")
 def start(mode: str, template: str):
     """启动 Daily Agent 服务"""
-    async def _start():
+    async def _init_and_setup():
+        """初始化数据库和配置（异步部分）"""
         from src.database import init_db
         
         # 检查是否首次启动
@@ -186,9 +335,14 @@ def start(mode: str, template: str):
 
 请选择 [1-2]: """)
             choice = input().strip()
-            mode = "fast" if choice == "1" else "configure"
+            return "fast" if choice == "1" else "configure"
+        return mode
+    
+    async def _run_setup(selected_mode: str):
+        """运行设置（异步部分）"""
+        from src.database import init_db
         
-        if mode == "fast" or (not mode and template):
+        if selected_mode == "fast" or (not selected_mode and template):
             # Fast 模式启动
             console.print("""
 🚀 Daily Agent - Fast 模式
@@ -226,26 +380,31 @@ def start(mode: str, template: str):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             """)
         
-        elif mode == "configure":
+        elif selected_mode == "configure":
             # Configure 模式 - 运行完整向导
             from src.setup_wizard import SetupWizard
             wizard = SetupWizard()
             await wizard.run_full_setup()
-        
-        # 启动服务
-        import uvicorn
-        from src.config import get_settings
-        settings = get_settings()
-        
-        console.print(f"\n[green]正在启动服务...[/green]\n")
-        uvicorn.run(
-            "src.main:app",
-            host=settings.host,
-            port=settings.port,
-            reload=settings.debug
-        )
     
-    asyncio.run(_start())
+    # 第一步：交互式选择模式（如果需要）
+    selected_mode = asyncio.run(_init_and_setup())
+    
+    # 第二步：运行设置
+    if selected_mode:
+        asyncio.run(_run_setup(selected_mode))
+    
+    # 第三步：启动服务（同步方式，避免 asyncio.run 嵌套）
+    import uvicorn
+    from src.config import get_settings
+    settings = get_settings()
+    
+    console.print(f"\n[green]正在启动服务...[/green]\n")
+    uvicorn.run(
+        "src.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug
+    )
 
 
 @cli.command()
@@ -301,11 +460,11 @@ def status():
         # 今日统计
         console.print("\n[bold]今日统计:[/bold]")
         try:
-            async for session in get_session():
+            async with get_session() as session:
                 content_repo = ContentRepository(session)
                 report_repo = DailyReportRepository(session)
                 
-                today = datetime.utcnow().date()
+                today = datetime.now(timezone.utc).date()
                 yesterday = today - timedelta(days=1)
                 
                 # 获取今日采集数量
@@ -313,14 +472,12 @@ def status():
                 console.print(f"  采集内容: {len(daily_items)} 条")
                 
                 # 获取今日日报
-                today_report = await report_repo.get_by_date("default", datetime.utcnow())
+                today_report = await report_repo.get_by_date("default", datetime.now(timezone.utc))
                 if today_report:
                     console.print(f"  生成日报: 1 份 ({today_report.total_items} 条内容)")
                     console.print(f"  推送状态: {'已推送' if today_report.is_sent else '未推送'}")
                 else:
                     console.print("  生成日报: 0 份")
-                
-                break
         except Exception as e:
             console.print(f"  统计信息: 暂不可用 ({e})")
         
@@ -378,9 +535,9 @@ def auth_list():
             # 计算状态
             if not cred["is_valid"]:
                 status = "[red]✗ 失效[/red]"
-            elif cred["expires_at"] and cred["expires_at"] < datetime.utcnow():
+            elif cred["expires_at"] and cred["expires_at"] < datetime.now(timezone.utc):
                 status = "[red]✗ 已过期[/red]"
-            elif cred["expires_at"] and (cred["expires_at"] - datetime.utcnow()).days <= 3:
+            elif cred["expires_at"] and (cred["expires_at"] - datetime.now(timezone.utc)).days <= 3:
                 status = "[yellow]⚠ 即将过期[/yellow]"
             else:
                 status = "[green]✓ 有效[/green]"
@@ -403,72 +560,100 @@ def auth_list():
 @auth.command("add")
 @click.argument("source_name")
 @click.option("--username", "-u", help="用户名（可选）")
-def auth_add(source_name: str, username: str = None):
+@click.option("--browser", "-b", is_flag=True, help="使用浏览器自动获取（推荐）")
+@click.option("--manual", "-m", is_flag=True, help="手动粘贴 cURL")
+def auth_add(source_name: str, username: str = None, browser: bool = False, manual: bool = False):
     """添加认证配置"""
-    async def _add():
-        from src.auth_manager import get_auth_manager, AUTH_CONFIGS
-        
-        manager = get_auth_manager()
-        config = manager.get_config(source_name)
-        
-        if not config:
-            console.print(f"[red]不支持的渠道: {source_name}[/red]")
-            console.print("\n支持的渠道:")
-            for key, cfg in AUTH_CONFIGS.items():
-                console.print(f"  • [green]{key}[/green] - {cfg.display_name}")
-            return
-        
-        # 显示帮助信息
-        console.print(Panel(
-            f"[bold blue]正在为 [{config.display_name}] 配置认证信息[/bold blue]\n\n"
-            f"{config.help_text}\n\n"
-            "[yellow]提示: 支持粘贴完整的 cURL 命令或仅 Cookie 字符串[/yellow]",
-            title="认证配置向导",
-            border_style="blue"
-        ))
-        
-        # 获取输入
-        console.print("\n[cyan]请粘贴 cURL 命令或 Cookie 字符串:[/cyan]")
-        console.print("(输入完成后按 Enter，支持多行输入，按 Ctrl+D 或输入空行结束)\n")
-        
-        lines = []
-        try:
-            while True:
-                line = input("> ")
-                if not line.strip():
-                    break
-                lines.append(line)
-        except EOFError:
-            pass
-        
-        curl_command = "\n".join(lines).strip()
-        
-        if not curl_command:
-            console.print("[red]输入为空，取消配置[/red]")
-            return
-        
-        # 添加认证
-        with console.status("[bold green]正在保存认证配置..."):
-            success, message = await manager.add_auth(source_name, curl_command, username)
+    from src.auth_manager import get_auth_manager, AUTH_CONFIGS
+    
+    manager = get_auth_manager()
+    config = manager.get_config(source_name)
+    
+    if not config:
+        click.echo(f"不支持的渠道: {source_name}")
+        click.echo("\n支持的渠道:")
+        for key, cfg in AUTH_CONFIGS.items():
+            click.echo(f"  • {key} - {cfg.display_name}")
+        return
+    
+    # 选择方式
+    if not browser and not manual:
+        click.echo(f"\n{'='*60}")
+        click.echo(f"正在为 [{config.display_name}] 配置认证信息")
+        click.echo(f"{'='*60}\n")
+        click.echo("请选择获取方式:")
+        click.echo("  [1] 🌐 浏览器自动获取（推荐）- 自动登录并提取 Cookie")
+        click.echo("  [2] 📋 手动粘贴 cURL - 从浏览器开发者工具复制")
+        choice = click.prompt("请选择", type=str, default="1")
+        browser = choice == "1"
+        manual = choice == "2"
+    
+    if browser:
+        # 浏览器自动获取
+        _auth_add_browser(source_name, username)
+    else:
+        # 手动粘贴
+        _auth_add_manual(source_name, username)
+
+
+def _auth_add_browser(source_name: str, username: str = None):
+    """使用浏览器自动获取 Cookie"""
+    async def _run():
+        from src.browser_auth import interactive_auth
+        success, message = await interactive_auth(source_name, username)
+        if success:
+            click.echo(f"\n✓ {message}")
+        else:
+            click.echo(f"\n✗ {message}")
+    
+    asyncio.run(_run())
+
+
+def _auth_add_manual(source_name: str, username: str = None):
+    """手动粘贴 cURL"""
+    from src.auth_manager import get_auth_manager
+    
+    manager = get_auth_manager()
+    config = manager.get_config(source_name)
+    
+    click.echo("\n" + "-"*40)
+    click.echo(config.help_text)
+    click.echo("-"*40)
+    click.echo("\n请粘贴 cURL 命令或 Cookie 字符串:")
+    
+    try:
+        curl_command = input("> ").strip()
+    except (EOFError, KeyboardInterrupt):
+        click.echo("\n已取消")
+        return
+    
+    curl_command = curl_command.replace("\\", "")
+    
+    if not curl_command:
+        click.echo("输入为空，取消配置")
+        return
+    
+    async def _save_and_test():
+        click.echo("正在保存...")
+        success, message = await manager.add_auth(source_name, curl_command, username)
         
         if success:
-            console.print(f"\n[green]{message}[/green]")
+            click.echo(f"✓ {message}")
             
-            # 自动测试
-            console.print("\n[bold]正在测试认证...[/bold]")
-            is_valid, test_msg, user_info = await manager.test_auth(source_name)
-            
-            if is_valid:
-                console.print(f"[green]✓ 认证测试通过: {test_msg}[/green]")
-                if user_info and user_info.get("username"):
-                    console.print(f"  用户名: [cyan]{user_info['username']}[/cyan]")
+            # 对严格反爬平台，跳过 HTTP 测试（避免 406）
+            if source_name in ['douyin']:
+                click.echo("✓ Cookie 已保存（适合配合浏览器采集器使用）")
             else:
-                console.print(f"[yellow]⚠ 认证测试失败: {test_msg}[/yellow]")
-                console.print("[yellow]配置已保存，但可能无法正常使用，请检查 Cookie 是否有效[/yellow]")
+                click.echo("正在测试...")
+                is_valid, test_msg, _ = await manager.test_auth(source_name)
+                if is_valid:
+                    click.echo(f"✓ 测试通过")
+                else:
+                    click.echo(f"⚠ 测试未通过: {test_msg}")
         else:
-            console.print(f"\n[red]✗ {message}[/red]")
+            click.echo(f"✗ {message}")
     
-    asyncio.run(_add())
+    asyncio.run(_save_and_test())
 
 
 @auth.command("update")
@@ -572,7 +757,7 @@ def auth_guide():
     
     console.print("\n[bold]常用命令:[/bold]")
     console.print("  [cyan]python -m src.cli auth list[/cyan]     - 查看已配置的认证")
-    console.print("  [cyan]python -m src.cli auth add jike[/cyan]  - 添加即刻认证")
+    console.print("  [cyan]python -m src.cli auth add jike[/cyan] - 添加即刻认证")
     console.print("  [cyan]python -m src.cli auth test jike[/cyan] - 测试即刻认证")
 
 
@@ -601,6 +786,7 @@ def setup(ctx, all_modules: bool, module_name: str, mode: str, template: str):
             return
         
         elif mode == "configure" or all_modules or module_name:
+            from src.setup_wizard import SetupWizard
             wizard = SetupWizard()
             
             if all_modules:
@@ -624,6 +810,7 @@ def setup(ctx, all_modules: bool, module_name: str, mode: str, template: str):
             return
         
         # 默认运行完整向导
+        from src.setup_wizard import SetupWizard
         wizard = SetupWizard()
         await wizard.run_full_setup()
     
@@ -707,6 +894,16 @@ def setup_templates():
     
     console.print("\n[bold]使用模板快速设置：[/bold]")
     console.print("  [cyan]python -m src.cli setup wizard[/cyan]  - 启动向导并选择模板")
+
+
+@setup.command("expert")
+def setup_expert():
+    """专家模式 - LLM 辅助配置（推荐深度定制用户）"""
+    async def _expert():
+        from src.expert_setup import run_expert_setup
+        await run_expert_setup()
+
+    asyncio.run(_expert())
 
 
 # ============ LLM 配置命令 ============
@@ -923,15 +1120,740 @@ def config_reset(user: str):
         from src.database import get_session
         from sqlalchemy import text
         
-        async for session in get_session():
+        async with get_session() as session:
             # 删除用户相关数据
             await session.execute(text("DELETE FROM user_profiles WHERE user_id = :user_id"), {"user_id": user})
             await session.execute(text("DELETE FROM user_feedbacks WHERE user_id = :user_id"), {"user_id": user})
             await session.commit()
             console.print(f"[green]✅ 用户 {user} 的配置已重置[/green]")
-            break
     
     asyncio.run(_reset())
+
+
+@config.command("edit")
+@click.option("--file", "-f", type=click.Choice(["columns", "env", "daily"]), default="columns", help="要编辑的配置文件")
+def config_edit(file: str):
+    """使用编辑器打开配置文件"""
+    import os
+    import subprocess
+    
+    # 确定文件路径
+    if file == "columns":
+        filepath = "config/columns.yaml"
+    elif file == "env":
+        filepath = ".env"
+    elif file == "daily":
+        filepath = "config/daily_report.yaml"
+    else:
+        console.print(f"[red]未知的配置文件: {file}[/red]")
+        return
+    
+    # 检查文件是否存在
+    if not os.path.exists(filepath):
+        console.print(f"[yellow]配置文件不存在: {filepath}[/yellow]")
+        if file == "daily":
+            console.print("此文件将在首次运行设置向导后创建")
+        return
+    
+    # 获取编辑器
+    editor = os.environ.get("EDITOR", "vim")
+    if sys.platform == "win32":
+        editor = os.environ.get("EDITOR", "notepad")
+    
+    # 显示文件信息
+    console.print(f"[bold]编辑配置文件:[/bold] {filepath}")
+    console.print(f"使用编辑器: {editor}\n")
+    
+    # 打开编辑器
+    try:
+        subprocess.run([editor, filepath], check=True)
+        console.print(f"\n[green]✅ 配置文件已保存[/green]")
+        console.print(f"运行 [cyan]python -m src.cli config validate[/cyan] 验证配置")
+        console.print(f"运行 [cyan]curl -X POST http://localhost:8080/api/v1/reload[/cyan] 热更新配置")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]编辑器退出异常: {e}[/red]")
+    except FileNotFoundError:
+        console.print(f"[red]找不到编辑器: {editor}[/red]")
+        console.print("请设置 EDITOR 环境变量指向你的编辑器")
+
+
+@config.command("sources")
+def config_sources():
+    """列出所有配置的数据源"""
+    from src.config import get_column_config
+    
+    try:
+        col_config = get_column_config()
+        columns = col_config.get_columns(enabled_only=False)
+        
+        console.print("[bold]配置的数据源列表[/bold]\n")
+        
+        for col in columns:
+            col_id = col.get("id")
+            col_name = col.get("name")
+            enabled = col.get("enabled", True)
+            
+            status = "[green]✓[/green]" if enabled else "[red]✗[/red]"
+            console.print(f"{status} [bold]{col_name}[/bold] ([dim]{col_id}[/dim])")
+            
+            sources = col.get("sources", [])
+            for source in sources:
+                source_name = source.get("name", "unnamed")
+                source_type = source.get("type", "unknown")
+                console.print(f"    • {source_name} ([dim]{source_type}[/dim])")
+            
+            console.print()
+        
+        # 统计
+        total_sources = sum(len(c.get("sources", [])) for c in columns)
+        enabled_cols = sum(1 for c in columns if c.get("enabled", True))
+        
+        console.print(f"[dim]总计: {len(columns)} 个分栏 ({enabled_cols} 个启用), {total_sources} 个数据源[/dim]")
+    
+    except Exception as e:
+        console.print(f"[red]加载配置失败: {e}[/red]")
+
+
+# ============ 诊断工具命令 ============
+
+@cli.command()
+@click.option("--fix", "auto_fix", is_flag=True, help="自动修复发现的问题")
+def doctor(auto_fix: bool):
+    """运行系统诊断 - 检查环境、配置、依赖等"""
+    async def _doctor():
+        from src.doctor import run_diagnosis, fix_issues, DoctorReport
+        
+        if auto_fix:
+            await fix_issues()
+        else:
+            checker = await run_diagnosis()
+            report = DoctorReport(checker)
+            report.print_report()
+    
+    asyncio.run(_doctor())
+
+
+@cli.command()
+def fix():
+    """自动修复系统问题"""
+    async def _fix():
+        from src.doctor import fix_issues
+        await fix_issues()
+    
+    asyncio.run(_fix())
+
+
+# ============ 日报管理命令 ============
+
+@cli.group()
+def reports():
+    """日报管理 - 查看、对比历史日报"""
+    pass
+
+
+@reports.command("list")
+@click.option("--user", "-u", default="default", help="用户 ID")
+@click.option("--limit", "-l", default=10, help="显示数量")
+@click.option("--format", "-f", type=click.Choice(["table", "json"]), default="table", help="输出格式")
+def reports_list(user: str, limit: int, format: str):
+    """列出历史日报"""
+    async def _list():
+        from src.database import get_session, DailyReportRepository
+        
+        async with get_session() as session:
+            repo = DailyReportRepository(session)
+            
+            # 获取日报列表
+            from sqlalchemy import select
+            from src.database import DailyReportDB
+            
+            result = await session.execute(
+                select(DailyReportDB)
+                .where(DailyReportDB.user_id == user)
+                .order_by(DailyReportDB.date.desc())
+                .limit(limit)
+            )
+            reports = result.scalars().all()
+            
+            if not reports:
+                console.print("[yellow]暂无日报记录[/yellow]")
+                return
+            
+            if format == "json":
+                import json
+                data = [
+                    {
+                        "id": r.id,
+                        "date": r.date.isoformat() if r.date else None,
+                        "title": r.title,
+                        "total_items": r.total_items,
+                        "is_sent": r.is_sent,
+                        "sent_at": r.sent_at.isoformat() if r.sent_at else None
+                    }
+                    for r in reports
+                ]
+                console.print(json.dumps(data, indent=2, ensure_ascii=False))
+            else:
+                table = Table(title=f"📰 {user} 的日报列表")
+                table.add_column("日期", style="cyan")
+                table.add_column("标题", style="green")
+                table.add_column("内容数", justify="right")
+                table.add_column("状态", style="yellow")
+                table.add_column("操作")
+                
+                for r in reports:
+                    date_str = r.date.strftime("%Y-%m-%d") if r.date else "-"
+                    status = "[green]已推送[/green]" if r.is_sent else "[dim]未推送[/dim]"
+                    actions = f"[cyan]view[/cyan] | [cyan]export[/cyan]"
+                    
+                    table.add_row(
+                        date_str,
+                        r.title[:30] + "..." if len(r.title) > 30 else r.title,
+                        str(r.total_items),
+                        status,
+                        actions
+                    )
+                
+                console.print(table)
+                console.print(f"\n[dim]使用 `python -m src.cli reports view <report_id>` 查看详情[/dim]")
+    
+    asyncio.run(_list())
+
+
+@reports.command("view")
+@click.argument("report_id")
+@click.option("--format", "-f", type=click.Choice(["markdown", "json", "html"]), default="markdown", help="输出格式")
+def reports_view(report_id: str, format: str):
+    """查看日报详情"""
+    async def _view():
+        from src.database import get_session, DailyReportRepository, ContentRepository
+        from src.output.formatter import MarkdownFormatter
+        
+        async with get_session() as session:
+            repo = DailyReportRepository(session)
+            content_repo = ContentRepository(session)
+            
+            # 获取日报
+            report = await repo.get_by_id(report_id)
+            if not report:
+                console.print(f"[red]日报不存在: {report_id}[/red]")
+                return
+            
+            # 获取日报内容
+            items = await content_repo.get_by_column(
+                column_id=None,
+                date=report.date
+            )
+            
+            if format == "json":
+                import json
+                data = {
+                    "id": report.id,
+                    "title": report.title,
+                    "date": report.date.isoformat() if report.date else None,
+                    "total_items": report.total_items,
+                    "is_sent": report.is_sent,
+                    "items": [
+                        {
+                            "title": item.title,
+                            "url": item.url,
+                            "source": item.source,
+                            "summary": item.summary
+                        }
+                        for item in items
+                    ]
+                }
+                console.print(json.dumps(data, indent=2, ensure_ascii=False))
+            
+            elif format == "html":
+                from src.output.formatter import HTMLFormatter
+                formatter = HTMLFormatter()
+                # 简化输出
+                console.print(f"[yellow]HTML 格式暂不支持直接显示，请导出查看[/yellow]")
+            
+            else:  # markdown
+                console.print(f"\n[bold]{report.title}[/bold]\n")
+                console.print(f"日期: {report.date.strftime('%Y-%m-%d') if report.date else '-'}")
+                console.print(f"内容数: {report.total_items}")
+                console.print(f"推送状态: {'已推送' if report.is_sent else '未推送'}")
+                console.print("\n" + "━" * 50 + "\n")
+                
+                for i, item in enumerate(items[:20], 1):  # 最多显示20条
+                    console.print(f"{i}. [bold]{item.title}[/bold]")
+                    console.print(f"   [dim]{item.url}[/dim]")
+                    if item.summary:
+                        console.print(f"   {item.summary[:100]}...")
+                    console.print()
+    
+    asyncio.run(_view())
+
+
+@reports.command("diff")
+@click.argument("report_id1")
+@click.argument("report_id2")
+def reports_diff(report_id1: str, report_id2: str):
+    """对比两份日报"""
+    async def _diff():
+        from src.database import get_session, DailyReportRepository, ContentRepository
+        
+        async with get_session() as session:
+            repo = DailyReportRepository(session)
+            content_repo = ContentRepository(session)
+            
+            # 获取两份日报
+            report1 = await repo.get_by_id(report_id1)
+            report2 = await repo.get_by_id(report_id2)
+            
+            if not report1 or not report2:
+                console.print("[red]日报不存在[/red]")
+                return
+            
+            # 获取内容
+            items1 = await content_repo.get_by_column(date=report1.date)
+            items2 = await content_repo.get_by_column(date=report2.date)
+            
+            urls1 = {item.url for item in items1}
+            urls2 = {item.url for item in items2}
+            
+            # 对比
+            only_in_1 = urls1 - urls2
+            only_in_2 = urls2 - urls1
+            in_both = urls1 & urls2
+            
+            console.print(f"\n[bold]📊 日报对比[/bold]\n")
+            console.print(f"日报 1: {report1.title} ({report1.date.strftime('%Y-%m-%d') if report1.date else '-'})")
+            console.print(f"日报 2: {report2.title} ({report2.date.strftime('%Y-%m-%d') if report2.date else '-'})")
+            console.print()
+            
+            console.print(f"[green]共同内容: {len(in_both)} 条[/green]")
+            console.print(f"[blue]仅在日报 1: {len(only_in_1)} 条[/blue]")
+            console.print(f"[yellow]仅在日报 2: {len(only_in_2)} 条[/yellow]")
+            console.print()
+            
+            if only_in_1:
+                console.print("[bold blue]仅在日报 1 中的内容:[/bold blue]")
+                for url in list(only_in_1)[:5]:
+                    item = next((i for i in items1 if i.url == url), None)
+                    if item:
+                        console.print(f"  • {item.title}")
+                if len(only_in_1) > 5:
+                    console.print(f"  ... 还有 {len(only_in_1) - 5} 条")
+                console.print()
+            
+            if only_in_2:
+                console.print("[bold yellow]仅在日报 2 中的内容:[/bold yellow]")
+                for url in list(only_in_2)[:5]:
+                    item = next((i for i in items2 if i.url == url), None)
+                    if item:
+                        console.print(f"  • {item.title}")
+                if len(only_in_2) > 5:
+                    console.print(f"  ... 还有 {len(only_in_2) - 5} 条")
+    
+    asyncio.run(_diff())
+
+
+@reports.command("stats")
+def reports_stats():
+    """查看性能统计"""
+    async def _stats():
+        from src.metrics import print_performance_report
+        await print_performance_report()
+    
+    asyncio.run(_stats())
+
+
+@reports.command("export")
+@click.argument("report_id")
+@click.option("--output", "-o", help="输出文件路径")
+@click.option("--format", "-f", type=click.Choice(["markdown", "html", "json"]), default="markdown", help="导出格式")
+def reports_export(report_id: str, output: str, format: str):
+    """导出日报"""
+    async def _export():
+        from src.database import get_session, DailyReportRepository, ContentRepository
+        
+        async with get_session() as session:
+            repo = DailyReportRepository(session)
+            content_repo = ContentRepository(session)
+            
+            report = await repo.get_by_id(report_id)
+            if not report:
+                console.print(f"[red]日报不存在: {report_id}[/red]")
+                return
+            
+            items = await content_repo.get_by_column(date=report.date)
+            
+            # 确定输出文件
+            if not output:
+                output = f"report_{report_id}_{format}"
+                if format == "markdown":
+                    output += ".md"
+                elif format == "html":
+                    output += ".html"
+                else:
+                    output += ".json"
+            
+            # 生成内容
+            if format == "markdown":
+                from src.output.formatter import MarkdownFormatter
+                formatter = MarkdownFormatter()
+                # 简化：直接生成
+                content = f"# {report.title}\n\n"
+                content += f"日期: {report.date.strftime('%Y-%m-%d') if report.date else '-'}\n\n"
+                for item in items:
+                    content += f"## {item.title}\n"
+                    content += f"来源: {item.source}\n"
+                    content += f"链接: {item.url}\n"
+                    if item.summary:
+                        content += f"\n{item.summary}\n"
+                    content += "\n---\n\n"
+            
+            elif format == "html":
+                content = f"<h1>{report.title}</h1>"
+                content += f"<p>日期: {report.date.strftime('%Y-%m-%d') if report.date else '-'}</p>"
+                for item in items:
+                    content += f"<h2>{item.title}</h2>"
+                    content += f"<p>来源: {item.source}</p>"
+                    content += f"<p><a href='{item.url}'>阅读原文</a></p>"
+                    if item.summary:
+                        content += f"<p>{item.summary}</p>"
+                    content += "<hr>"
+            
+            else:  # json
+                import json
+                data = {
+                    "report": {
+                        "id": report.id,
+                        "title": report.title,
+                        "date": report.date.isoformat() if report.date else None,
+                        "total_items": report.total_items
+                    },
+                    "items": [
+                        {
+                            "title": item.title,
+                            "url": item.url,
+                            "source": item.source,
+                            "summary": item.summary
+                        }
+                        for item in items
+                    ]
+                }
+                content = json.dumps(data, indent=2, ensure_ascii=False)
+            
+            # 写入文件
+            with open(output, "w", encoding="utf-8") as f:
+                f.write(content)
+            
+            console.print(f"[green]✅ 日报已导出到: {output}[/green]")
+    
+    asyncio.run(_export())
+
+
+# ============ 测试命令 ============
+
+@cli.group()
+def test():
+    """测试工具 - 测试采集器、推送渠道等"""
+    pass
+
+
+@test.command("source")
+@click.argument("source_name")
+def test_source(source_name: str):
+    """测试单个数据源"""
+    async def _test():
+        from src.config import get_column_config
+        from src.collector import CollectorManager, RSSCollector, HackerNewsCollector, BilibiliCollector
+        
+        console.print(f"[bold]测试数据源: {source_name}[/bold]\n")
+        
+        # 查找数据源配置
+        col_config = get_column_config()
+        columns = col_config.get_columns(enabled_only=False)
+        
+        source_config = None
+        source_type = None
+        
+        for col in columns:
+            for source in col.get("sources", []):
+                if source.get("name") == source_name:
+                    source_config = source
+                    source_type = source.get("type")
+                    break
+            if source_config:
+                break
+        
+        if not source_config:
+            console.print(f"[red]✗ 未找到数据源: {source_name}[/red]")
+            console.print("\n可用数据源:")
+            for col in columns:
+                for source in col.get("sources", []):
+                    console.print(f"  • {source.get('name')} ({source.get('type')})")
+            return
+        
+        # 创建对应采集器
+        try:
+            if source_type == "rss":
+                collector = RSSCollector(source_name, source_config)
+            elif source_type == "api":
+                provider = source_config.get("provider")
+                if provider == "hackernews":
+                    collector = HackerNewsCollector(source_name, source_config)
+                else:
+                    console.print(f"[red]✗ 不支持的 API 提供商: {provider}[/red]")
+                    return
+            elif source_type == "bilibili":
+                collector = BilibiliCollector(source_name, source_config)
+            else:
+                console.print(f"[red]✗ 不支持的采集器类型: {source_type}[/red]")
+                return
+            
+            # 执行采集
+            with console.status(f"[bold green]正在采集 {source_name}..."):
+                result = await collector.collect()
+            
+            # 显示结果
+            if result.success:
+                console.print(f"[green]✓ 采集成功[/green]")
+                console.print(f"  采集数量: {len(result.items)} 条")
+                console.print(f"  消息: {result.message}")
+                
+                if result.items:
+                    console.print("\n[bold]最新内容:[/bold]")
+                    for i, item in enumerate(result.items[:3], 1):
+                        console.print(f"  {i}. {item.title[:50]}...")
+                        console.print(f"     [dim]{item.url[:60]}...[/dim]")
+            else:
+                console.print(f"[red]✗ 采集失败: {result.message}[/red]")
+        
+        except Exception as e:
+            console.print(f"[red]✗ 测试出错: {e}[/red]")
+        
+        finally:
+            if 'collector' in locals():
+                await collector.close()
+    
+    asyncio.run(_test())
+
+
+@test.command("channel")
+@click.argument("channel_name")
+def test_channel(channel_name: str):
+    """测试推送渠道"""
+    async def _test():
+        from src.config import get_settings
+        from src.output.publisher import Publisher
+        from src.models import DailyReport, ChannelType
+        
+        settings = get_settings()
+        console.print(f"[bold]测试推送渠道: {channel_name}[/bold]\n")
+        
+        # 检查配置
+        channel_configs = {
+            "telegram": (settings.telegram_bot_token, settings.telegram_chat_id),
+            "slack": (settings.slack_bot_token, settings.slack_channel),
+            "discord": (settings.discord_bot_token, settings.discord_channel_id),
+            "email": (settings.smtp_host, settings.email_to),
+        }
+        
+        if channel_name.lower() not in channel_configs:
+            console.print(f"[red]✗ 不支持的渠道: {channel_name}[/red]")
+            console.print(f"\n支持的渠道: {', '.join(channel_configs.keys())}")
+            return
+        
+        config = channel_configs[channel_name.lower()]
+        if not all(config):
+            console.print(f"[red]✗ {channel_name} 配置不完整[/red]")
+            console.print("\n请检查环境变量配置:")
+            env_vars = {
+                "telegram": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"],
+                "slack": ["SLACK_BOT_TOKEN", "SLACK_CHANNEL"],
+                "discord": ["DISCORD_BOT_TOKEN", "DISCORD_CHANNEL_ID"],
+                "email": ["SMTP_HOST", "EMAIL_TO"],
+            }
+            for var in env_vars.get(channel_name.lower(), []):
+                console.print(f"  - {var}")
+            return
+        
+        # 创建测试日报
+        from datetime import datetime, timezone
+        test_report = DailyReport(
+            id="test_report",
+            date=datetime.now(timezone.utc),
+            user_id="test",
+            title="测试日报 - Daily Agent 连接测试",
+            total_items=0
+        )
+        
+        # 尝试推送
+        try:
+            publisher = Publisher()
+            
+            channel_type = ChannelType(channel_name.lower())
+            
+            with console.status(f"[bold green]正在测试 {channel_name} 连接..."):
+                results = await publisher.publish(
+                    report=test_report,
+                    columns_config=[],
+                    items_by_column={},
+                    channels=[channel_type]
+                )
+            
+            result = results.get(channel_type)
+            if result and result.success:
+                console.print(f"[green]✓ 连接测试成功！[/green]")
+                console.print(f"  消息: {result.message}")
+            else:
+                console.print(f"[red]✗ 连接测试失败[/red]")
+                if result:
+                    console.print(f"  错误: {result.message}")
+        
+        except Exception as e:
+            console.print(f"[red]✗ 测试出错: {e}[/red]")
+    
+    asyncio.run(_test())
+
+
+@test.command("llm")
+def test_llm():
+    """测试 LLM 连接"""
+    async def _test():
+        from src.llm_config import get_llm_manager
+        
+        console.print("[bold]测试 LLM 连接[/bold]\n")
+        
+        manager = get_llm_manager()
+        config = manager.get_current_config()
+        
+        if not config.is_configured():
+            console.print("[red]✗ LLM 未配置[/red]")
+            console.print("\n请运行: [cyan]python -m src.cli llm setup[/cyan]")
+            return
+        
+        console.print(f"提供商: {config.provider}")
+        console.print(f"模型: {config.model}")
+        console.print("")
+        
+        with console.status("[bold green]正在测试 API 连接..."):
+            success, message = await manager.test_connection()
+        
+        if success:
+            console.print(f"[green]✓ 连接成功[/green]")
+            console.print(f"  {message}")
+        else:
+            console.print(f"[red]✗ 连接失败[/red]")
+            console.print(f"  {message}")
+    
+    asyncio.run(_test())
+
+
+@test.command("rules")
+@click.option("--column", "-c", help="测试分栏规则")
+@click.option("--source", "-s", help="测试数据源规则")
+def test_rules(column: str, source: str):
+    """测试过滤规则效果"""
+    from src.rule_tester import cli_test_rules
+    cli_test_rules(column_id=column, source_name=source)
+
+
+# ============ 快捷操作命令 ============
+
+@cli.group()
+def disable():
+    """禁用数据源或分栏"""
+    pass
+
+
+@disable.command("source")
+@click.argument("source_name")
+def disable_source(source_name: str):
+    """临时禁用某个数据源"""
+    async def _disable():
+        console.print(f"[yellow]禁用数据源: {source_name}[/yellow]")
+        console.print("\n[dim]提示: 此功能需要修改 config/columns.yaml[/dim]")
+        console.print("请手动编辑配置文件，将对应源的 enabled 设为 false")
+    
+    asyncio.run(_disable())
+
+
+@disable.command("column")
+@click.argument("column_id")
+def disable_column(column_id: str):
+    """临时禁用某个分栏"""
+    async def _disable():
+        console.print(f"[yellow]禁用分栏: {column_id}[/yellow]")
+        console.print("\n[dim]提示: 此功能需要修改 config/columns.yaml[/dim]")
+        console.print("请手动编辑配置文件，将对应分栏的 enabled 设为 false")
+    
+    asyncio.run(_disable())
+
+
+@cli.group()
+def enable():
+    """启用数据源或分栏"""
+    pass
+
+
+@enable.command("source")
+@click.argument("source_name")
+def enable_source(source_name: str):
+    """启用某个数据源"""
+    console.print(f"[green]启用数据源: {source_name}[/green]")
+    console.print("\n[dim]提示: 此功能需要修改 config/columns.yaml[/dim]")
+
+
+@enable.command("column")
+@click.argument("column_id")
+def enable_column(column_id: str):
+    """启用某个分栏"""
+    console.print(f"[green]启用分栏: {column_id}[/green]")
+    console.print("\n[dim]提示: 此功能需要修改 config/columns.yaml[/dim]")
+
+
+# ============ 插件管理命令 ============
+
+@cli.group()
+def plugin():
+    """插件管理 - 管理自定义采集器、处理器、推送渠道"""
+    pass
+
+
+@plugin.command("list")
+def plugin_list():
+    """列出所有可用插件"""
+    from src.plugin_system import cli_list_plugins
+    cli_list_plugins()
+
+
+@plugin.command("create")
+@click.argument("name")
+@click.option("--type", "plugin_type", type=click.Choice(["collector", "processor", "publisher"]), 
+              default="collector", help="插件类型")
+def plugin_create(name: str, plugin_type: str):
+    """创建插件模板"""
+    from src.plugin_system import cli_create_plugin
+    cli_create_plugin(name, plugin_type)
+
+
+@plugin.command("load")
+@click.argument("name")
+def plugin_load(name: str):
+    """加载插件"""
+    async def _load():
+        from src.plugin_system import get_plugin_manager
+        
+        manager = get_plugin_manager()
+        plugin = manager.load_plugin(name)
+        
+        if plugin:
+            success = await manager.initialize_plugin(name)
+            if success:
+                console.print(f"[green]✓ 插件 {name} 加载成功[/green]")
+            else:
+                console.print(f"[red]✗ 插件 {name} 初始化失败[/red]")
+        else:
+            console.print(f"[red]✗ 插件 {name} 加载失败[/red]")
+    
+    asyncio.run(_load())
 
 
 # 简化命令别名
@@ -946,6 +1868,207 @@ def quickstart(user: str):
         await wizard.run_full_setup()
     
     asyncio.run(_quickstart())
+
+
+@cli.command()
+def preview():
+    """预览今日日报（不保存）"""
+    async def _preview():
+        from src.service import DailyAgentService
+        from src.output.formatter import MarkdownFormatter
+        
+        console.print("[bold]生成日报预览...[/bold]\n")
+        
+        service = DailyAgentService()
+        await service.initialize()
+        
+        # 采集
+        with console.status("[bold green]正在采集内容..."):
+            results = await service.collect_all()
+        
+        total = sum(len(r.items) for r in results.values() if r.success)
+        console.print(f"✓ 采集完成: {total} 条内容\n")
+        
+        # 显示采集结果
+        table = Table(title="采集结果")
+        table.add_column("来源", style="cyan")
+        table.add_column("状态", style="green")
+        table.add_column("数量", justify="right")
+        
+        for name, result in results.items():
+            status = "✓" if result.success else "✗"
+            table.add_row(name, status, str(len(result.items)))
+        
+        console.print(table)
+        console.print("\n[yellow]注意: 这只是预览，未生成正式日报[/yellow]")
+        console.print("运行 [cyan]python -m src.cli generate[/cyan] 生成正式日报")
+    
+    asyncio.run(_preview())
+
+
+# ============ 发送日报命令 ============
+
+@cli.group()
+def send():
+    """发送日报到指定渠道"""
+    pass
+
+
+@send.command("telegram")
+@click.option("--report-id", "-r", help="日报 ID（默认最新）")
+@click.option("--preview", "-p", is_flag=True, help="预览模式（不实际发送）")
+def send_telegram(report_id: str, preview: bool):
+    """发送日报到 Telegram"""
+    async def _send():
+        from datetime import datetime, timezone
+        from sqlalchemy.ext.asyncio import AsyncSession
+        from src.database import get_session, DailyReportRepository
+        from src.models import DailyReport, ChannelType
+        from src.service import DailyAgentService
+        from src.config import get_settings
+        
+        settings = get_settings()
+        
+        # 检查配置
+        if not settings.telegram_bot_token or not settings.telegram_chat_id:
+            console.print("[red]✗ Telegram 配置缺失[/red]\n")
+            console.print("请设置以下环境变量:")
+            console.print("  [cyan]TELEGRAM_BOT_TOKEN[/cyan]=your-bot-token")
+            console.print("  [cyan]TELEGRAM_CHAT_ID[/cyan]=your-chat-id\n")
+            console.print("获取方法:")
+            console.print("  1. 在 Telegram 搜索 @BotFather 创建 Bot，获取 Token")
+            console.print("  2. 发送 /start 给 Bot")
+            console.print("  3. 访问 https://api.telegram.org/bot<TOKEN>/getUpdates 获取 Chat ID")
+            return
+        
+        # 初始化服务
+        service = DailyAgentService()
+        await service.initialize()
+        
+        # 获取日报
+        if report_id:
+            async with get_session() as session:
+                repo = DailyReportRepository(session)
+                db_report = await repo.get_by_id(report_id)
+                if not db_report:
+                    console.print(f"[red]✗ 日报不存在: {report_id}[/red]")
+                    return
+                report = DailyReport(
+                    id=db_report.id,
+                    date=db_report.date,
+                    user_id=db_report.user_id,
+                    title=db_report.title,
+                    total_items=db_report.total_items
+                )
+        else:
+            # 获取最新日报
+            async with get_session() as session:
+                repo = DailyReportRepository(session)
+                db_report = await repo.get_by_date("default", datetime.now(timezone.utc))
+                if not db_report:
+                    console.print("[red]✗ 没有找到日报[/red]")
+                    console.print("\n请先运行: [cyan]python -m src.cli generate[/cyan]")
+                    return
+                report = DailyReport(
+                    id=db_report.id,
+                    date=db_report.date,
+                    user_id=db_report.user_id,
+                    title=db_report.title,
+                    total_items=db_report.total_items
+                )
+        
+        console.print(f"[bold]发送日报到 Telegram[/bold]\n")
+        console.print(f"日报: {report.title}")
+        console.print(f"日期: {report.date.strftime('%Y-%m-%d')}")
+        console.print(f"条目: {report.total_items} 条\n")
+        
+        if preview:
+            console.print("[yellow]预览模式 - 未实际发送[/yellow]")
+            return
+        
+        # 发送
+        with console.status("[bold green]正在发送..."):
+            results = await service.push_report(report, [ChannelType.TELEGRAM.value])
+        
+        result = results.get(ChannelType.TELEGRAM)
+        if result and result.success:
+            console.print(f"[green]✓ 发送成功！[/green]")
+            console.print(f"  {result.message}")
+        else:
+            console.print(f"[red]✗ 发送失败[/red]")
+            if result:
+                console.print(f"  错误: {result.message}")
+    
+    asyncio.run(_send())
+
+
+@send.command("latest")
+@click.option("--channel", "-c", default="telegram", type=click.Choice(["telegram", "slack", "discord", "email"]), help="目标渠道")
+def send_latest(channel: str):
+    """发送最新日报到指定渠道"""
+    async def _send():
+        from datetime import datetime, timezone
+        from src.database import get_session, DailyReportRepository
+        from src.models import DailyReport, ChannelType
+        from src.service import DailyAgentService
+        
+        # 初始化服务
+        service = DailyAgentService()
+        await service.initialize()
+        
+        # 获取最新日报
+        async with get_session() as session:
+            repo = DailyReportRepository(session)
+            db_report = await repo.get_by_date("default", datetime.now(timezone.utc))
+            if not db_report:
+                console.print("[red]✗ 没有找到日报[/red]")
+                console.print("\n请先运行: [cyan]python -m src.cli generate[/cyan]")
+                return
+            report = DailyReport(
+                id=db_report.id,
+                date=db_report.date,
+                user_id=db_report.user_id,
+                title=db_report.title,
+                total_items=db_report.total_items
+            )
+        
+        # 映射渠道
+        channel_map = {
+            "telegram": ChannelType.TELEGRAM,
+            "slack": ChannelType.SLACK,
+            "discord": ChannelType.DISCORD,
+            "email": ChannelType.EMAIL,
+        }
+        
+        channel_type = channel_map.get(channel)
+        
+        console.print(f"[bold]发送日报到 {channel.upper()}[/bold]\n")
+        console.print(f"日报: {report.title}")
+        console.print(f"日期: {report.date.strftime('%Y-%m-%d')}\n")
+        
+        with console.status(f"[bold green]正在发送到 {channel}..."):
+            results = await service.push_report(report, [channel_type.value])
+        
+        result = results.get(channel_type)
+        if result and result.success:
+            console.print(f"[green]✓ 发送成功！[/green]")
+            console.print(f"  {result.message}")
+        else:
+            console.print(f"[red]✗ 发送失败[/red]")
+            if result:
+                console.print(f"  错误: {result.message}")
+    
+    asyncio.run(_send())
+
+
+@cli.command(name="expert")
+def expert_setup():
+    """专家模式 - LLM 辅助配置（推荐）"""
+    async def _expert():
+        from src.expert_setup import run_expert_setup
+        await run_expert_setup()
+
+    asyncio.run(_expert())
 
 
 if __name__ == "__main__":

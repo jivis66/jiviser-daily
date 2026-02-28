@@ -102,6 +102,60 @@ PROFILE_TEMPLATES = {
         experience_level="mid",
         daily_time_minutes=15
     ),
+    "ai_researcher": UserProfileTemplate(
+        name="🧠 AI 研究员",
+        description="专注 AI 研究、学术论文、前沿技术",
+        industry="互联网/科技",
+        position="AI研究员",
+        expertise=["深度学习", "自然语言处理", "计算机视觉"],
+        experience_level="expert",
+        daily_time_minutes=30
+    ),
+    "frontend_dev": UserProfileTemplate(
+        name="🌐 前端开发者",
+        description="专注前端技术、框架动态、UI组件",
+        industry="互联网/科技",
+        position="前端开发工程师",
+        expertise=["前端开发", "JavaScript/TypeScript", "UI框架"],
+        experience_level="senior",
+        daily_time_minutes=20
+    ),
+    "backend_dev": UserProfileTemplate(
+        name="⚙️ 后端开发者",
+        description="专注后端架构、数据库、分布式系统",
+        industry="互联网/科技",
+        position="后端开发工程师",
+        expertise=["后端开发", "分布式系统", "数据库"],
+        experience_level="senior",
+        daily_time_minutes=20
+    ),
+    "data_engineer": UserProfileTemplate(
+        name="📈 数据工程师",
+        description="专注数据处理、数据管道、数据架构",
+        industry="互联网/科技",
+        position="数据工程师",
+        expertise=["数据处理", "ETL", "数据仓库"],
+        experience_level="senior",
+        daily_time_minutes=25
+    ),
+    "security_engineer": UserProfileTemplate(
+        name="🔒 安全工程师",
+        description="关注网络安全、攻防技术、安全合规",
+        industry="互联网/科技",
+        position="安全工程师",
+        expertise=["网络安全", "渗透测试", "安全合规"],
+        experience_level="senior",
+        daily_time_minutes=20
+    ),
+    "entrepreneur": UserProfileTemplate(
+        name="🚀 创业者",
+        description="关注创业动态、融资信息、管理实践",
+        industry="创业",
+        position="创始人/CEO",
+        expertise=["创业管理", "融资", "团队建设"],
+        experience_level="expert",
+        daily_time_minutes=25
+    ),
     "general": UserProfileTemplate(
         name="📰 综合资讯",
         description="平衡的科技、商业、社会资讯",
@@ -158,6 +212,70 @@ INTEREST_TEMPLATES = {
         ],
         content_types=["news", "analysis"],
         source_preferences={"media": 0.95, "community": 0.6, "social": 0.7, "academic": 0.5},
+        language_preference="zh_first",
+        content_depth="medium",
+        novelty_preference="trending"
+    ),
+    "ai_researcher": InterestTemplate(
+        name="🧠 AI 研究员",
+        description="专注 AI 研究、学术论文、前沿技术",
+        core_topics=[
+            {"name": "深度学习", "weight": 1.0},
+            {"name": "大语言模型", "weight": 0.95},
+            {"name": "学术论文", "weight": 0.9},
+            {"name": "计算机视觉", "weight": 0.85},
+            {"name": "强化学习", "weight": 0.8},
+        ],
+        content_types=["paper", "research", "news"],
+        source_preferences={"media": 0.5, "community": 0.7, "social": 0.4, "academic": 1.0},
+        language_preference="en_first",
+        content_depth="deep",
+        novelty_preference="latest"
+    ),
+    "frontend_dev": InterestTemplate(
+        name="🌐 前端开发者",
+        description="专注前端技术、框架动态、UI组件",
+        core_topics=[
+            {"name": "React/Vue", "weight": 1.0},
+            {"name": "JavaScript/TypeScript", "weight": 0.95},
+            {"name": "前端工程化", "weight": 0.9},
+            {"name": "UI/UX", "weight": 0.85},
+            {"name": "性能优化", "weight": 0.8},
+        ],
+        content_types=["tutorial", "news", "code"],
+        source_preferences={"media": 0.8, "community": 0.9, "social": 0.7, "academic": 0.3},
+        language_preference="zh_first",
+        content_depth="deep",
+        novelty_preference="balanced"
+    ),
+    "backend_dev": InterestTemplate(
+        name="⚙️ 后端开发者",
+        description="专注后端架构、数据库、分布式系统",
+        core_topics=[
+            {"name": "微服务架构", "weight": 1.0},
+            {"name": "数据库", "weight": 0.95},
+            {"name": "分布式系统", "weight": 0.9},
+            {"name": "云原生", "weight": 0.85},
+            {"name": "性能优化", "weight": 0.8},
+        ],
+        content_types=["tutorial", "news", "analysis"],
+        source_preferences={"media": 0.8, "community": 0.9, "social": 0.6, "academic": 0.5},
+        language_preference="zh_first",
+        content_depth="deep",
+        novelty_preference="balanced"
+    ),
+    "entrepreneur": InterestTemplate(
+        name="🚀 创业者",
+        description="关注创业动态、融资信息、管理实践",
+        core_topics=[
+            {"name": "创业", "weight": 1.0},
+            {"name": "融资", "weight": 0.95},
+            {"name": "团队管理", "weight": 0.9},
+            {"name": "商业模式", "weight": 0.85},
+            {"name": "增长", "weight": 0.8},
+        ],
+        content_types=["news", "analysis", "interview"],
+        source_preferences={"media": 0.9, "community": 0.8, "social": 0.7, "academic": 0.3},
         language_preference="zh_first",
         content_depth="medium",
         novelty_preference="trending"
@@ -224,6 +342,66 @@ DAILY_REPORT_TEMPLATES = {
         time_window_hours=24,
         dedup_level="high",
         summary_method="llm"
+    ),
+    "ai_researcher": DailyReportTemplate(
+        name="🧠 AI 研究员",
+        description="顶会论文、研究动态、开源模型",
+        style="detailed",
+        columns=[
+            {"id": "ai_papers", "name": "📄 最新论文", "enabled": True, "max_items": 5, "order": 1},
+            {"id": "ai_news", "name": "🤖 AI 动态", "enabled": True, "max_items": 5, "order": 2},
+            {"id": "models", "name": "🔧 开源模型", "enabled": True, "max_items": 3, "order": 3},
+            {"id": "research", "name": "🔬 研究前沿", "enabled": True, "max_items": 3, "order": 4},
+        ],
+        min_quality_score=75,
+        time_window_hours=48,
+        dedup_level="high",
+        summary_method="llm"
+    ),
+    "frontend_dev": DailyReportTemplate(
+        name="🌐 前端开发者",
+        description="前端框架、UI组件、性能优化",
+        style="detailed",
+        columns=[
+            {"id": "frontend", "name": "⚛️ 前端框架", "enabled": True, "max_items": 5, "order": 1},
+            {"id": "ui_libs", "name": "🎨 UI 组件库", "enabled": True, "max_items": 4, "order": 2},
+            {"id": "tools", "name": "🛠️ 开发工具", "enabled": True, "max_items": 3, "order": 3},
+            {"id": "performance", "name": "🚀 性能优化", "enabled": True, "max_items": 3, "order": 4},
+        ],
+        min_quality_score=65,
+        time_window_hours=24,
+        dedup_level="medium",
+        summary_method="llm"
+    ),
+    "backend_dev": DailyReportTemplate(
+        name="⚙️ 后端开发者",
+        description="后端架构、数据库、分布式系统",
+        style="detailed",
+        columns=[
+            {"id": "architecture", "name": "🏗️ 架构设计", "enabled": True, "max_items": 5, "order": 1},
+            {"id": "databases", "name": "💾 数据库", "enabled": True, "max_items": 4, "order": 2},
+            {"id": "cloud", "name": "☁️ 云原生", "enabled": True, "max_items": 3, "order": 3},
+            {"id": "performance", "name": "🚀 性能优化", "enabled": True, "max_items": 3, "order": 4},
+        ],
+        min_quality_score=65,
+        time_window_hours=24,
+        dedup_level="medium",
+        summary_method="llm"
+    ),
+    "entrepreneur": DailyReportTemplate(
+        name="🚀 创业者",
+        description="创业动态、融资信息、管理实践",
+        style="brief",
+        columns=[
+            {"id": "headlines", "name": "🔥 创业头条", "enabled": True, "max_items": 5, "order": 1},
+            {"id": "funding", "name": "💰 融资动态", "enabled": True, "max_items": 4, "order": 2},
+            {"id": "management", "name": "👥 管理实践", "enabled": True, "max_items": 3, "order": 3},
+            {"id": "growth", "name": "📈 增长案例", "enabled": True, "max_items": 3, "order": 4},
+        ],
+        min_quality_score=60,
+        time_window_hours=24,
+        dedup_level="medium",
+        summary_method="rule"
     ),
     "general": DailyReportTemplate(
         name="📰 综合资讯",
@@ -305,22 +483,59 @@ class SetupWizard:
             border_style="green"
         ))
         
-        Prompt.ask("按 Enter 开始设置")
+        Prompt.ask("按 Enter 开始设置", default="")
     
     async def _setup_profile(self) -> dict:
         """设置用户画像"""
         console.print("这些基础信息将帮助我为您筛选更相关的内容。\n")
         
         # 选择配置方式
-        use_template = Confirm.ask(
-            "📝 是否使用预设模板快速配置？",
-            default=True
-        )
+        console.print("📝 选择配置方式：")
+        console.print("  [1] 🚀 智能推荐 - 根据你的兴趣自动推荐")
+        console.print("  [2] 📋 手动选择 - 从预设模板中选择")
+        console.print("  [3] 🎨 自定义 - 详细设置每一项")
         
-        if use_template:
+        choice = IntPrompt.ask("请选择", choices=["1", "2", "3"], default="1")
+        
+        if choice == 1:
+            return await self._setup_profile_with_recommendation()
+        elif choice == 2:
             return await self._setup_profile_from_template()
         else:
             return await self._setup_profile_custom()
+    
+    async def _setup_profile_with_recommendation(self) -> dict:
+        """使用智能推荐设置用户画像"""
+        from src.template_recommender import TemplateRecommender
+        
+        recommender = TemplateRecommender()
+        template_id = recommender.interactive_recommend()
+        
+        if template_id == "custom":
+            return await self._setup_profile_custom()
+        
+        # 获取模板配置
+        if template_id not in PROFILE_TEMPLATES:
+            template_id = "general"
+        
+        template = PROFILE_TEMPLATES[template_id]
+        
+        # 允许微调
+        customize = Confirm.ask(
+            "\n📝 是否对推荐模板进行微调？",
+            default=False
+        )
+        
+        if customize:
+            return await self._customize_profile_template(template)
+        
+        return {
+            "industry": template.industry,
+            "position": template.position,
+            "expertise": template.expertise,
+            "experience_level": template.experience_level,
+            "daily_time_minutes": template.daily_time_minutes
+        }
     
     async def _setup_profile_from_template(self) -> dict:
         """从模板设置用户画像"""
@@ -389,7 +604,8 @@ class SetupWizard:
         
         # 专业领域
         expertise_input = Prompt.ask(
-            "\n[bold]📝 您的专业领域或技术栈是？[/bold]（空格分隔，例如: AI Python 产品设计）"
+            "\n[bold]📝 您的专业领域或技术栈是？[/bold]（空格分隔，例如: AI Python 产品设计）",
+            default=""
         )
         config["expertise"] = [e.strip() for e in expertise_input.split() if e.strip()]
         
@@ -418,7 +634,8 @@ class SetupWizard:
         # 修改专业领域
         add_expertise = Prompt.ask(
             f"\n当前专业领域: {', '.join(config['expertise'])}\n"
-            "是否添加其他领域？（空格分隔，直接回车跳过）"
+            "是否添加其他领域？（空格分隔，直接回车跳过）",
+            default=""
         )
         if add_expertise:
             config["expertise"].extend([e.strip() for e in add_expertise.split() if e.strip()])

@@ -1,12 +1,17 @@
 """
 Pydantic 数据模型定义
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer
+
+
+def utc_now() -> datetime:
+    """获取当前 UTC 时间"""
+    return datetime.now(timezone.utc)
 
 
 class ContentStatus(str, Enum):
@@ -61,10 +66,36 @@ class ContentItem(BaseModel):
     summary: Optional[str] = Field(default=None, description="摘要")
     key_points: List[str] = Field(default_factory=list, description="关键要点")
     
+    @field_validator("key_points", "topics", "entities", "keywords", mode="before")
+    @classmethod
+    def ensure_list(cls, v):
+        """确保字段总是列表类型"""
+        import json
+        
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            # 尝试解析 JSON 字符串
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                return []
+            except:
+                return []
+        if callable(v):  # 防止内置函数/方法
+            print(f"[ContentItem] 警告: 字段值是 callable 而不是 list，重置为空列表")
+            return []
+        # 其他类型
+        print(f"[ContentItem] 警告: 字段值类型是 {type(v)} 而不是 list，重置为空列表")
+        return []
+    
     # 元数据
     author: Optional[str] = Field(default=None, description="作者")
     publish_time: Optional[datetime] = Field(default=None, description="发布时间")
-    fetch_time: datetime = Field(default_factory=datetime.utcnow, description="采集时间")
+    fetch_time: datetime = Field(default_factory=utc_now, description="采集时间")
     
     # 分类标签
     topics: List[str] = Field(default_factory=list, description="主题标签")
@@ -90,10 +121,11 @@ class ContentItem(BaseModel):
     is_duplicate: bool = Field(default=False, description="是否重复")
     duplicate_of: Optional[str] = Field(default=None, description="重复自")
     
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    @field_serializer("fetch_time", "publish_time")
+    def serialize_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.isoformat()
 
 
 class UserProfile(BaseModel):
@@ -131,8 +163,8 @@ class UserProfile(BaseModel):
     saved_items: List[str] = Field(default_factory=list, description="收藏的内容")
     dismissed_items: List[str] = Field(default_factory=list, description="屏蔽的内容")
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class DailyReport(BaseModel):
@@ -160,12 +192,13 @@ class DailyReport(BaseModel):
     is_sent: bool = Field(default=False, description="是否已发送")
     sent_at: Optional[datetime] = Field(default=None, description="发送时间")
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    @field_serializer("date", "created_at", "sent_at")
+    def serialize_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        if value is None:
+            return None
+        return value.isoformat()
 
 
 class FilterConfig(BaseModel):
@@ -222,7 +255,7 @@ class HealthStatus(BaseModel):
     
     status: str = Field(default="healthy", description="状态")
     version: str = Field(default="1.0.0", description="版本")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     
     # 组件状态
     database: bool = Field(default=True, description="数据库状态")

@@ -126,9 +126,9 @@ class ContentSelector:
         max_age_hours: int = 48
     ) -> List[ContentItem]:
         """按时间过滤"""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
-        cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         return [
             item for item in items 
             if (item.publish_time or item.fetch_time) >= cutoff

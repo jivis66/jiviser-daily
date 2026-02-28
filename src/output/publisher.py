@@ -44,21 +44,13 @@ class Publisher:
     ) -> Dict[ChannelType, PushResult]:
         """
         发布日报到多个渠道
-        
-        Args:
-            report: 日报
-            columns_config: 分栏配置
-            items_by_column: 分栏内容
-            channels: 推送渠道列表
-            user_config: 用户配置
-            
-        Returns:
-            Dict[ChannelType, PushResult]: 推送结果
         """
         results = {}
         
         for channel in channels:
             try:
+                print(f"[Publisher] 开始推送到 {channel.value}")
+                
                 if channel == ChannelType.TELEGRAM:
                     result = await self._push_telegram(
                         report, columns_config, items_by_column
@@ -87,8 +79,12 @@ class Publisher:
                     )
                 
                 results[channel] = result
+                print(f"[Publisher] {channel.value} 结果: {result.message}")
                 
             except Exception as e:
+                import traceback
+                print(f"[Publisher] {channel.value} 异常: {e}")
+                traceback.print_exc()
                 results[channel] = PushResult(
                     success=False,
                     channel=channel,
@@ -103,7 +99,10 @@ class Publisher:
         columns_config: List[Dict],
         items_by_column: Dict[str, List[ContentItem]]
     ) -> PushResult:
-        """推送到 Telegram"""
+        """推送到 Telegram（简化版）"""
+        print(f"[Telegram] 开始推送，报告 ID: {report.id}")
+        
+        # 检查配置
         if not settings.telegram_bot_token or not settings.telegram_chat_id:
             return PushResult(
                 success=False,
@@ -111,47 +110,142 @@ class Publisher:
                 message="Telegram 配置缺失"
             )
         
-        formatter = self.formatters["chat"]
-        messages = formatter.format_for_channel(
-            report, columns_config, items_by_column, ChannelType.TELEGRAM
-        )
+        # 检查内容
+        has_content = any(items for items in items_by_column.values() if items)
+        if not has_content:
+            return PushResult(
+                success=False,
+                channel=ChannelType.TELEGRAM,
+                message="日报没有内容"
+            )
         
+        # 直接构建简单消息，不使用复杂模板
+        messages = []
+        
+        # 标题
+        header = f"📰 *{report.title}*\n"
+        header += f"📅 {report.date.strftime('%Y年%m月%d日')}\n"
+        header += f"📊 共 {report.total_items} 条精选内容\n\n"
+        messages.append(header)
+        
+        # 各分栏内容
+        for col_config in columns_config:
+            col_id = col_config.get("id")
+            col_name = col_config.get("name", col_id)
+            items = items_by_column.get(col_id, [])
+            
+            if not items:
+                continue
+            
+            section = f"*📂 {col_name}*\n\n"
+            
+            for item in items[:5]:  # 每栏最多5条
+                # 安全获取字段
+                title = str(item.title) if item.title else "无标题"
+                url = str(item.url) if item.url else ""
+                summary = ""
+                if hasattr(item, 'summary') and item.summary:
+                    summary = str(item.summary)[:100] + "..."
+                
+                section += f"• *{title}*\n"
+                if summary:
+                    section += f"  {summary}\n"
+                if url:
+                    section += f"  [阅读原文]({url})\n"
+                section += "\n"
+            
+            messages.append(section)
+        
+        # 合并消息（如果不太长）
+        full_message = "\n".join(messages)
+        
+        # Telegram 限制 4096 字符
+        MAX_LENGTH = 4000
+        if len(full_message) > MAX_LENGTH:
+            # 分段发送
+            chunks = []
+            current = ""
+            for msg in messages:
+                if len(current) + len(msg) > MAX_LENGTH:
+                    if current:
+                        chunks.append(current)
+                    current = msg
+                else:
+                    current += msg
+            if current:
+                chunks.append(current)
+        else:
+            chunks = [full_message]
+        
+        print(f"[Telegram] 分成 {len(chunks)} 段发送")
+        
+        # 发送
         client = httpx.AsyncClient(timeout=30.0)
         message_ids = []
         
         try:
-            for msg in messages:
+            for i, chunk in enumerate(chunks):
+                if not chunk.strip():
+                    continue
+                
                 response = await client.post(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
                     json={
                         "chat_id": settings.telegram_chat_id,
-                        "text": msg,
+                        "text": chunk,
                         "parse_mode": "Markdown",
-                        "disable_web_page_preview": False
+                        "disable_web_page_preview": True,
+                        "disable_notification": i > 0
                     }
                 )
+                
                 data = response.json()
+                
                 if data.get("ok"):
-                    message_ids.append(str(data["result"]["message_id"]))
+                    msg_id = data.get("result", {}).get("message_id")
+                    if msg_id:
+                        message_ids.append(str(msg_id))
                 else:
-                    return PushResult(
-                        success=False,
-                        channel=ChannelType.TELEGRAM,
-                        message=f"发送失败: {data.get('description')}"
-                    )
+                    error_msg = data.get("description", "未知错误")
+                    print(f"[Telegram] 发送失败: {error_msg}")
+                    
+                    # 尝试纯文本
+                    if "parse" in error_msg.lower() or "markdown" in error_msg.lower():
+                        plain_response = await client.post(
+                            f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                            json={
+                                "chat_id": settings.telegram_chat_id,
+                                "text": chunk[:MAX_LENGTH],
+                                "disable_notification": i > 0
+                            }
+                        )
+                        plain_data = plain_response.json()
+                        if plain_data.get("ok"):
+                            msg_id = plain_data.get("result", {}).get("message_id")
+                            if msg_id:
+                                message_ids.append(str(msg_id))
             
-            return PushResult(
-                success=True,
-                channel=ChannelType.TELEGRAM,
-                message=f"成功发送 {len(messages)} 条消息",
-                message_ids=message_ids
-            )
-            
+            if message_ids:
+                return PushResult(
+                    success=True,
+                    channel=ChannelType.TELEGRAM,
+                    message=f"成功发送 {len(message_ids)} 条消息",
+                    message_ids=message_ids
+                )
+            else:
+                return PushResult(
+                    success=False,
+                    channel=ChannelType.TELEGRAM,
+                    message="发送失败"
+                )
+                
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return PushResult(
                 success=False,
                 channel=ChannelType.TELEGRAM,
-                message=str(e)
+                message=f"异常: {str(e)}"
             )
         finally:
             await client.aclose()
@@ -170,7 +264,6 @@ class Publisher:
                 message="Slack 配置缺失"
             )
         
-        # 使用 Markdown 格式
         formatter = self.formatters["markdown"]
         content = formatter.format_report(report, columns_config, items_by_column)
         
@@ -182,7 +275,7 @@ class Publisher:
                 headers={"Authorization": f"Bearer {settings.slack_bot_token}"},
                 json={
                     "channel": settings.slack_channel,
-                    "text": content[:3000],  # Slack 有长度限制
+                    "text": content[:3000],
                     "unfurl_links": True
                 }
             )
@@ -201,7 +294,6 @@ class Publisher:
                     channel=ChannelType.SLACK,
                     message=f"发送失败: {data.get('error')}"
                 )
-                
         except Exception as e:
             return PushResult(
                 success=False,
@@ -231,7 +323,6 @@ class Publisher:
         client = httpx.AsyncClient(timeout=30.0)
         
         try:
-            # Discord 消息长度限制 2000
             chunks = [content[i:i+1900] for i in range(0, len(content), 1900)]
             message_ids = []
             
@@ -255,10 +346,9 @@ class Publisher:
             return PushResult(
                 success=True,
                 channel=ChannelType.DISCORD,
-                message=f"成功发送 {len(chunks)} 条消息",
+                message=f"成功发送 {len(message_ids)} 条消息",
                 message_ids=message_ids
             )
-            
         except Exception as e:
             return PushResult(
                 success=False,
@@ -287,11 +377,9 @@ class Publisher:
             from email.mime.text import MIMEText
             from email.mime.multipart import MIMEMultipart
             
-            # 生成 HTML 内容
             formatter = self.formatters["html"]
             html_content = formatter.format_report(report, columns_config, items_by_column)
             
-            # 构建邮件
             msg = MIMEMultipart("alternative")
             msg["Subject"] = f"{report.title} - {report.date.strftime('%Y-%m-%d')}"
             msg["From"] = settings.email_from or settings.smtp_user
@@ -299,7 +387,6 @@ class Publisher:
             
             msg.attach(MIMEText(html_content, "html", "utf-8"))
             
-            # 发送
             await aiosmtplib.send(
                 msg,
                 hostname=settings.smtp_host,
@@ -314,7 +401,6 @@ class Publisher:
                 channel=ChannelType.EMAIL,
                 message="邮件发送成功"
             )
-            
         except Exception as e:
             return PushResult(
                 success=False,
@@ -336,7 +422,6 @@ class Publisher:
             formatter = self.formatters["markdown"]
             content = formatter.format_report(report, columns_config, items_by_column)
             
-            # 保存到 data/exports
             exports_dir = "data/exports"
             os.makedirs(exports_dir, exist_ok=True)
             
@@ -351,7 +436,6 @@ class Publisher:
                 channel=ChannelType.IMARKDOWN,
                 message=f"已保存到 {filepath}"
             )
-            
         except Exception as e:
             return PushResult(
                 success=False,

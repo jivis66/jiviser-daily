@@ -3,12 +3,12 @@
 使用 SQLAlchemy 2.0 语法
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List, Optional
 
 from sqlalchemy import (
     JSON, DateTime, Float, ForeignKey, Integer, String, Text, 
-    create_engine, select, delete, func
+    create_engine, select, delete, func, text
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -16,6 +16,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from src.config import get_settings
 
 settings = get_settings()
+
+
+def utc_now() -> datetime:
+    """获取当前 UTC 时间"""
+    return datetime.now(timezone.utc)
 
 
 class Base(DeclarativeBase):
@@ -39,7 +44,7 @@ class ContentItemDB(Base):
     
     author: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     publish_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
-    fetch_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    fetch_time: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     
     topics: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     entities: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
@@ -82,7 +87,7 @@ class DailyReportDB(Base):
     is_sent: Mapped[bool] = mapped_column(default=False)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     
     items = relationship("DailyReportItemDB", back_populates="daily_report")
 
@@ -129,8 +134,8 @@ class UserProfileDB(Base):
     saved_items: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     dismissed_items: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class UserFeedbackDB(Base):
@@ -142,7 +147,7 @@ class UserFeedbackDB(Base):
     content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     feedback_type: Mapped[str] = mapped_column(String(50), nullable=False)  # like/dislike/save/dismiss
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class AuthCredentialDB(Base):
@@ -163,8 +168,8 @@ class AuthCredentialDB(Base):
     
     # 时间戳
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     last_verified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # 状态
@@ -191,13 +196,28 @@ def get_database_url() -> str:
 
 def init_engine():
     """初始化数据库引擎"""
+    import os
     global _engine
     if _engine is None:
         url = get_database_url()
+        # 确保数据库目录存在
+        if url.startswith("sqlite+aiosqlite:///"):
+            db_path = url.replace("sqlite+aiosqlite:///", "")
+            # 处理相对路径和绝对路径
+            if db_path.startswith("/"):
+                db_dir = os.path.dirname(db_path)
+            else:
+                db_dir = os.path.dirname(db_path) or "."
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
         _engine = create_async_engine(
             url,
             echo=settings.debug,
-            future=True
+            future=True,
+            connect_args={
+                "timeout": 30,
+                "check_same_thread": False,
+            }
         )
     return _engine
 
@@ -206,9 +226,16 @@ async def init_db():
     """初始化数据库表"""
     engine = init_engine()
     async with engine.begin() as conn:
+        # 启用 WAL 模式，减少数据库锁定问题
+        if "sqlite" in str(engine.url):
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA synchronous=NORMAL"))
         await conn.run_sync(Base.metadata.create_all)
 
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """获取数据库会话（依赖注入使用）"""
     global _async_session_maker
@@ -285,7 +312,7 @@ class ContentRepository:
     
     async def delete_old(self, days: int) -> int:
         """删除旧内容"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = utc_now() - timedelta(days=days)
         result = await self.session.execute(
             delete(ContentItemDB).where(ContentItemDB.fetch_time < cutoff)
         )
@@ -297,6 +324,25 @@ class ContentRepository:
             select(func.count()).where(ContentItemDB.status == status)
         )
         return result.scalar()
+    
+    async def get_by_status(
+        self, 
+        status: str,
+        date: Optional[datetime] = None,
+        limit: int = 100
+    ) -> List[ContentItemDB]:
+        """根据状态获取内容"""
+        query = select(ContentItemDB).where(ContentItemDB.status == status)
+        
+        if date:
+            start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=1)
+            query = query.where(ContentItemDB.fetch_time >= start, ContentItemDB.fetch_time < end)
+        
+        query = query.order_by(ContentItemDB.fetch_time.desc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        return result.scalars().all()
 
 
 class DailyReportRepository:
@@ -346,6 +392,15 @@ class DailyReportRepository:
         self.session.add(report_item)
         await self.session.flush()
         return report_item
+    
+    async def delete(self, report_id: str) -> bool:
+        """删除日报"""
+        report = await self.get_by_id(report_id)
+        if report:
+            await self.session.delete(report)
+            await self.session.flush()
+            return True
+        return False
 
 
 class AuthCredentialRepository:
@@ -368,7 +423,7 @@ class AuthCredentialRepository:
             existing.expires_at = credential.expires_at
             existing.is_valid = True
             existing.invalid_reason = None
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = utc_now()
             await self.session.flush()
             return existing
         else:
@@ -402,7 +457,7 @@ class AuthCredentialRepository:
     
     async def get_expiring_soon(self, hours: int = 72) -> List[AuthCredentialDB]:
         """获取即将过期的认证凭证"""
-        threshold = datetime.utcnow() + timedelta(hours=hours)
+        threshold = utc_now() + timedelta(hours=hours)
         result = await self.session.execute(
             select(AuthCredentialDB).where(
                 AuthCredentialDB.is_valid == True,
@@ -423,7 +478,7 @@ class AuthCredentialRepository:
         """更新最后验证时间"""
         credential = await self.get_by_source(source_name)
         if credential:
-            credential.last_verified = datetime.utcnow()
+            credential.last_verified = utc_now()
             await self.session.flush()
     
     async def delete(self, source_name: str) -> bool:

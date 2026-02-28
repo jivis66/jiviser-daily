@@ -7,7 +7,7 @@ import re
 import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
@@ -79,24 +79,6 @@ AUTH_CONFIGS: Dict[str, AuthConfig] = {
         """.strip(),
         test_endpoint="https://web.okjike.com/api/users/me",
         expires_days=30
-    ),
-    "xiaohongshu": AuthConfig(
-        source_name="xiaohongshu",
-        display_name="小红书",
-        auth_type="cookie",
-        login_url="https://www.xiaohongshu.com",
-        cookie_domains=[".xiaohongshu.com", "www.xiaohongshu.com"],
-        required_headers=["cookie", "user-agent", "referer"],
-        help_text="""
-📖 小红书 Cookie 获取步骤：
-   1. 使用 Chrome/Edge 浏览器登录小红书网页版 (https://www.xiaohongshu.com)
-   2. 按 F12 打开开发者工具，切换到 Network (网络) 标签
-   3. 刷新页面，找到 API 请求（如 /api/sns/web/v1/feed 或 /api/sns/web/v1/user/selfinfo）
-   4. 右键点击请求 → Copy → Copy as cURL (bash)
-   5. 粘贴完整的 cURL 命令
-        """.strip(),
-        test_endpoint="https://edith.xiaohongshu.com/api/sns/web/v1/user/selfinfo",
-        expires_days=7
     ),
     "zhihu": AuthConfig(
         source_name="zhihu",
@@ -181,6 +163,11 @@ class CURLParser:
         """
         解析 cURL 命令，提取 headers、cookie 等信息
         
+        支持格式：
+        - Bash cURL: curl -H "Cookie: xxx" https://...
+        - PowerShell: curl -Headers @{"Cookie"="xxx"} -Uri https://...
+        - 纯 Cookie 字符串: a=1;b=2
+        
         Args:
             curl_command: cURL 命令字符串
             
@@ -196,8 +183,12 @@ class CURLParser:
             "raw_cookies": ""
         }
         
-        # 清理命令
+        # 清理命令：统一换行符、去除多余空格
         curl_command = curl_command.strip()
+        curl_command = curl_command.replace('\r\n', '\n').replace('\\\n', '')
+        curl_command = curl_command.replace('\\n', '')
+        
+        # 去除行首的 curl
         if curl_command.startswith("curl "):
             curl_command = curl_command[5:]
         
@@ -209,12 +200,16 @@ class CURLParser:
                 result["cookies"] = CURLParser._parse_cookie_string(result["raw_cookies"])
                 return result
         
-        # 使用 shlex 分割命令
+        # 检测 PowerShell 格式
+        if "-Headers @{" in curl_command or "-Uri " in curl_command:
+            return CURLParser._parse_powershell_curl(curl_command, result)
+        
+        # 使用 shlex 分割命令（处理引号）
         try:
             parts = shlex.split(curl_command)
-        except ValueError:
-            # 分割失败，尝试简单分割
-            parts = curl_command.split()
+        except ValueError as e:
+            # 分割失败，可能是引号不匹配，尝试修复
+            parts = CURLParser._fallback_split(curl_command)
         
         i = 0
         while i < len(parts):
@@ -257,6 +252,77 @@ class CURLParser:
             del result["headers"]["cookie"]
         
         return result
+    
+    @staticmethod
+    def _parse_powershell_curl(curl_command: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """解析 PowerShell 格式的 cURL 命令"""
+        import re
+        
+        # 提取 Headers
+        headers_match = re.search(r'-Headers @\{([^}]+)\}', curl_command)
+        if headers_match:
+            headers_str = headers_match.group(1)
+            # 解析 "Key"="Value" 格式
+            for match in re.finditer(r'"([^"]+)"\s*=\s*"([^"]*)"', headers_str):
+                key, value = match.groups()
+                key_lower = key.lower()
+                if key_lower == "cookie":
+                    result["raw_cookies"] = value
+                    result["cookies"] = CURLParser._parse_cookie_string(value)
+                else:
+                    result["headers"][key_lower] = value
+        
+        # 提取 URI/URL
+        uri_match = re.search(r'-(?:Uri|Url)\s+"([^"]+)"', curl_command)
+        if uri_match:
+            result["url"] = uri_match.group(1)
+        
+        # 提取 Method
+        method_match = re.search(r'-Method\s+(\w+)', curl_command)
+        if method_match:
+            result["method"] = method_match.group(1).upper()
+        
+        return result
+    
+    @staticmethod
+    def _fallback_split(curl_command: str) -> list:
+        """当 shlex 分割失败时的备用分割方法"""
+        parts = []
+        current = ""
+        in_quotes = False
+        quote_char = None
+        
+        i = 0
+        while i < len(curl_command):
+            char = curl_command[i]
+            
+            if char in ('"', "'"):
+                if not in_quotes:
+                    in_quotes = True
+                    quote_char = char
+                    if current:
+                        parts.append(current)
+                        current = ""
+                elif quote_char == char:
+                    in_quotes = False
+                    quote_char = None
+                    parts.append(current)
+                    current = ""
+                else:
+                    current += char
+            elif char.isspace() and not in_quotes:
+                if current:
+                    parts.append(current)
+                    current = ""
+            else:
+                current += char
+            
+            i += 1
+        
+        if current:
+            parts.append(current)
+        
+        return parts
     
     @staticmethod
     def _parse_cookie_string(cookie_str: str) -> Dict[str, str]:
@@ -338,7 +404,7 @@ class AuthManager:
         credentials = encrypt_credentials(parsed["raw_cookies"])
         
         # 创建数据库记录
-        expires_at = datetime.utcnow() + timedelta(days=config.expires_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=config.expires_days)
         
         credential = AuthCredentialDB(
             source_name=source_name,
@@ -383,6 +449,30 @@ class AuthManager:
         if not credential.is_valid:
             return False, f"[{config.display_name}] 认证已失效，请更新: auth update {source_name}", None
         
+        # 对严格反爬平台，跳过 HTTP 测试（它们有动态签名机制）
+        strict_platforms = ['douyin']
+        if source_name in strict_platforms:
+            # 只验证 cookie 存在且未过期
+            try:
+                cookie_str = decrypt_credentials(credential.credentials)
+                if not cookie_str or len(cookie_str) < 10:
+                    return False, "Cookie 无效", None
+                
+                # 检查是否有过期标志的 cookie
+                has_session = any(key in cookie_str for key in ['web_session', 'session'])
+                
+                # 更新验证时间
+                async with get_session() as session:
+                    from src.database import AuthCredentialRepository
+                    repo = AuthCredentialRepository(session)
+                    await repo.update_last_verified(source_name)
+                
+                return True, "Cookie 已配置（跳过了严格平台的 HTTP 测试）", None
+                
+            except Exception as e:
+                return False, f"验证失败: {str(e)}", None
+        
+        # 其他平台进行 HTTP 测试
         try:
             # 解密凭证
             cookie_str = decrypt_credentials(credential.credentials)
@@ -435,14 +525,6 @@ class AuthManager:
                     "username": user.get("screenName"),
                     "user_id": user.get("id"),
                     "avatar": user.get("avatarImage", {}).get("thumbnailUrl")
-                }
-            
-            elif source_name == "xiaohongshu":
-                user = data.get("data", {})
-                return {
-                    "username": user.get("nickname"),
-                    "user_id": user.get("user_id"),
-                    "avatar": user.get("images")
                 }
             
             elif source_name == "zhihu":
@@ -525,7 +607,7 @@ class AuthManager:
                 "source_name": cred.source_name,
                 "display_name": config.display_name if config else cred.source_name,
                 "expires_at": cred.expires_at,
-                "hours_remaining": (cred.expires_at - datetime.utcnow()).total_seconds() / 3600
+                "hours_remaining": (cred.expires_at - datetime.now(timezone.utc)).total_seconds() / 3600
             })
         
         return result

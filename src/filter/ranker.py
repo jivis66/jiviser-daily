@@ -1,7 +1,7 @@
 """
 内容排序模块
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from src.models import ContentItem, UserProfile
@@ -80,7 +80,7 @@ class ContentRanker:
         user_profile: Optional[UserProfile]
     ) -> List[ContentItem]:
         """混合排序 - 综合多种因素"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         scored_items = []
         for item in items:
@@ -112,6 +112,10 @@ class ContentRanker:
         time = item.publish_time or item.fetch_time
         if not time:
             return 0.5
+        
+        # 确保时间是 aware 的（带时区信息）
+        if time.tzinfo is None:
+            time = time.replace(tzinfo=timezone.utc)
         
         age_hours = (now - time).total_seconds() / 3600
         
